@@ -1,7 +1,7 @@
 <template>
   <div class="relative w-full h-full flex flex-col">
-    <!-- Video clip area (top 60%) -->
-    <div class="flex-1 relative bg-gray-950">
+    <!-- Video clip area (top 55%) -->
+    <div class="flex-1 relative bg-gray-950" style="min-height: 0">
       <VideoClip
         ref="videoClipRef"
         :video-id="card.video_id"
@@ -10,17 +10,14 @@
       />
     </div>
 
-    <!-- Card info area (bottom 40%) -->
-    <div class="bg-gray-900 px-6 pt-5 pb-4 flex flex-col gap-3 rounded-t-3xl -mt-4 relative z-10">
-      <!-- Type badge + frequency -->
-      <div class="flex items-center gap-2">
-        <span
-          class="text-xs font-semibold px-3 py-1 rounded-full"
-          :class="typeBadgeClass"
-        >
+    <!-- Card info area (bottom) -->
+    <div class="bg-gray-900 px-6 pt-5 pb-4 flex flex-col gap-2 rounded-t-3xl -mt-4 relative z-10">
+
+      <!-- Type badge + tier + frequency -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs font-semibold px-3 py-1 rounded-full" :class="typeBadgeClass">
           {{ typeLabel }}
         </span>
-        <!-- Difficulty tier badge -->
         <span
           v-if="card.difficulty_tier"
           class="text-xs px-2 py-1 rounded-full font-bold"
@@ -29,9 +26,8 @@
         >
           {{ tierLabel }}
         </span>
-
         <span
-          v-if="card.frequency > 0"
+          v-if="card.frequency > 1"
           class="text-xs px-2 py-1 rounded-full font-medium"
           :class="frequencyBadgeClass"
           :title="`在影片中出現 ${card.frequency} 次`"
@@ -40,40 +36,50 @@
         </span>
       </div>
 
-      <!-- Keyword with TTS button -->
-      <div class="flex items-center gap-3">
-        <p class="text-2xl font-bold text-white leading-tight">
-          <mark class="bg-yellow-400 text-black px-1 rounded">{{ card.keyword }}</mark>
+      <!-- Keyword + phonetic + TTS -->
+      <div>
+        <div class="flex items-center gap-3">
+          <p class="text-2xl font-bold text-white leading-tight">
+            <mark class="bg-yellow-400 text-black px-1 rounded">{{ card.keyword }}</mark>
+          </p>
+          <button
+            v-if="hasTTS"
+            class="flex items-center justify-center w-11 h-11 min-h-[44px] min-w-[44px] rounded-full transition-colors"
+            :class="ttsAutoplay ? 'bg-blue-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
+            :title="ttsAutoplay ? '自動朗讀開啟（點擊關閉）' : '點擊朗讀 / 長按切換自動播放'"
+            @click.stop="onTTSClick"
+          >
+            🔊
+          </button>
+        </div>
+        <!-- IPA phonetic -->
+        <p v-if="dictData && dictData.phonetic" class="text-gray-400 text-sm mt-0.5">
+          {{ dictData.phonetic }}
+          <span v-if="dictData.partOfSpeech" class="text-gray-600 ml-1">{{ dictData.partOfSpeech }}</span>
         </p>
-        <button
-          v-if="hasTTS"
-          class="flex items-center justify-center w-9 h-9 rounded-full transition-colors min-h-[44px] min-w-[44px]"
-          :class="ttsAutoplay ? 'bg-blue-700 text-white' : 'bg-gray-700 text-gray-300'"
-          :title="ttsAutoplay ? '自動朗讀開啟（點擊關閉）' : '點擊朗讀'"
-          @click.stop="speak(card.keyword); toggleTTSAutoplay()"
-        >
-          🔊
-        </button>
       </div>
 
-      <!-- Chinese meaning (cedict if available, else auto-translated) -->
-      <p class="text-gray-300 text-base">
-        <span v-if="card.meaning_zh !== '—'">{{ card.meaning_zh }}</span>
-        <span v-else-if="keywordMeaning" class="text-blue-300">{{ keywordMeaning }}</span>
-        <span v-else class="text-gray-600 text-sm italic">翻譯中…</span>
+      <!-- English definition (from Free Dictionary API) -->
+      <p v-if="dictData && dictData.definition" class="text-gray-200 text-sm leading-snug">
+        {{ dictData.definition }}
       </p>
 
-      <!-- Sentence context: highlight keyword within the source sentence -->
-      <div v-if="card.sentence" class="space-y-1">
-        <p class="text-sm text-gray-400 leading-relaxed" v-html="highlightedSentence" />
+      <!-- Chinese meaning: cedict → MyMemory fallback -->
+      <p class="text-base" :class="chineseMeaningClass">
+        <span v-if="card.meaning_zh !== '—'">{{ card.meaning_zh }}</span>
+        <span v-else-if="keywordMeaning">{{ keywordMeaning }}</span>
+        <span v-else-if="translating" class="text-gray-600 text-sm italic">翻譯中…</span>
+        <span v-else class="text-gray-600 text-sm italic">—</span>
+      </p>
 
-        <!-- Auto translation -->
-        <p v-if="translating" class="text-xs text-gray-500 italic">翻譯中…</p>
-        <p v-else-if="translationText" class="text-xs text-blue-300 leading-relaxed">{{ translationText }}</p>
+      <!-- Sentence context -->
+      <div v-if="card.sentence" class="space-y-1">
+        <p class="text-sm text-gray-400 leading-relaxed" v-html="highlightedSentence"></p>
+        <p v-if="translationText" class="text-xs text-blue-300 leading-relaxed">{{ translationText }}</p>
       </div>
 
-      <!-- Slot for action buttons (ShadowingPanel, ActionBar injected by parent) -->
-      <slot />
+      <!-- Slot for ActionBar / ShadowingPanel -->
+      <slot></slot>
     </div>
   </div>
 </template>
@@ -81,144 +87,136 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue'
 import VideoClip from './VideoClip.vue'
+import { lookupDefinition } from '@/composables/useDictionary.js'
 
 const props = defineProps({
   card: {
     type: Object,
     required: true,
-    // { id, video_id, type, keyword, meaning_zh, clip_start, clip_end, sort_order }
   },
 })
 
-const videoClipRef = ref(null)
-const translating = ref(false)
+const videoClipRef  = ref(null)
+const translating   = ref(false)
 const translationText = ref('')
-const keywordMeaning = ref('')
+const keywordMeaning  = ref('')
+const dictData        = ref(null)  // { phonetic, partOfSpeech, definition, example }
 
-// TTS
+// ── TTS ───────────────────────────────────────────────────────────────────────
 const hasTTS = ref(typeof window !== 'undefined' && 'speechSynthesis' in window)
 const ttsAutoplay = ref(localStorage.getItem('jolike_tts_autoplay') === 'true')
 
 function speak(word) {
   if (!hasTTS.value) return
-  const utterance = new SpeechSynthesisUtterance(word)
-  utterance.lang = 'en-US'
-  utterance.rate = 0.85
+  const u = new SpeechSynthesisUtterance(word)
+  u.lang = 'en-US'
+  u.rate = 0.85
   window.speechSynthesis.cancel()
-  window.speechSynthesis.speak(utterance)
+  window.speechSynthesis.speak(u)
 }
 
-function toggleTTSAutoplay() {
+function onTTSClick() {
+  speak(props.card.keyword)
   ttsAutoplay.value = !ttsAutoplay.value
-  try {
-    localStorage.setItem('jolike_tts_autoplay', ttsAutoplay.value)
-  } catch { /* storage full — ignore */ }
+  try { localStorage.setItem('jolike_tts_autoplay', ttsAutoplay.value) } catch {}
 }
 
+// ── Translation cache ─────────────────────────────────────────────────────────
 const TRANS_LANGPAIR = 'en|zh-TW'
 
-function transCacheKey(text) {
-  return `jolike_trans_${TRANS_LANGPAIR}_${text}`
+function transCacheGet(text) {
+  try { return localStorage.getItem(`jolike_trans_${TRANS_LANGPAIR}_${text}`) || null } catch { return null }
+}
+function transCacheSet(text, val) {
+  try { localStorage.setItem(`jolike_trans_${TRANS_LANGPAIR}_${text}`, val) } catch {}
 }
 
-function transFromCache(text) {
-  try {
-    return localStorage.getItem(transCacheKey(text)) || null
-  } catch {
-    return null
-  }
-}
-
-function transToCache(text, result) {
-  try {
-    localStorage.setItem(transCacheKey(text), result)
-  } catch { /* storage full — skip */ }
-}
-
-async function translate(text) {
-  const cached = transFromCache(text)
-  if (cached !== null) return cached
+async function translateText(text) {
+  const cached = transCacheGet(text)
+  if (cached) return cached
   const res = await fetch(
     `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${TRANS_LANGPAIR}`
   )
   const data = await res.json()
   const result = data?.responseData?.translatedText || ''
-  if (result) transToCache(text, result)
+  if (result) transCacheSet(text, result)
   return result
 }
 
-async function fetchTranslation() {
+// ── Load card data ────────────────────────────────────────────────────────────
+async function loadCardData() {
   if (translating.value) return
-  translationText.value = ''
-  keywordMeaning.value = ''
   translating.value = true
+  translationText.value = ''
+  keywordMeaning.value  = ''
+  dictData.value        = null
+
   try {
     const tasks = [
-      props.card.sentence ? translate(props.card.sentence) : Promise.resolve(''),
-      props.card.meaning_zh === '—' ? translate(props.card.keyword) : Promise.resolve(''),
+      // 1. Free Dictionary for words (phonetic + definition)
+      props.card.type === 'word' ? lookupDefinition(props.card.keyword) : Promise.resolve(null),
+      // 2. Sentence translation (MyMemory)
+      props.card.sentence ? translateText(props.card.sentence) : Promise.resolve(''),
+      // 3. Keyword translation (MyMemory, only when cedict misses)
+      props.card.meaning_zh === '—' ? translateText(props.card.keyword) : Promise.resolve(''),
     ]
-    const [sentenceResult, keywordResult] = await Promise.all(tasks)
-    translationText.value = sentenceResult
-    keywordMeaning.value = keywordResult
+    const [dict, sentence, keyword] = await Promise.all(tasks)
+    dictData.value        = dict
+    translationText.value = sentence
+    keywordMeaning.value  = keyword
+
+    // Auto-play TTS when card loads (only if autoplay pref is on)
+    if (ttsAutoplay.value && hasTTS.value) speak(props.card.keyword)
   } catch {
-    // fail silently — sentence translation shows enough context
+    // fail silently
   } finally {
     translating.value = false
   }
 }
 
-// Auto-play TTS when card changes (button-only on first load to respect mobile gesture barrier)
-watch(() => props.card.id, () => {
-  fetchTranslation()
-  if (ttsAutoplay.value && hasTTS.value) speak(props.card.keyword)
-})
+watch(() => props.card.id, () => loadCardData())
+onMounted(() => loadCardData())
 
-onMounted(() => fetchTranslation())
-
-// Expose clip control to parent (ShadowingPanel needs to stop video before recording)
+// Expose to parent
 defineExpose({
-  stopVideo: () => videoClipRef.value?.stop(),
-  playVideo: () => videoClipRef.value?.play(),
+  stopVideo:  () => videoClipRef.value?.stop(),
+  playVideo:  () => videoClipRef.value?.play(),
 })
 
+// ── Display computed ──────────────────────────────────────────────────────────
 const highlightedSentence = computed(() => {
   if (!props.card.sentence) return ''
-  const keyword = props.card.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const regex = new RegExp(`(${keyword})`, 'gi')
+  const kw = props.card.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return props.card.sentence.replace(
-    regex,
+    new RegExp(`(${kw})`, 'gi'),
     '<mark class="bg-yellow-400/30 text-yellow-300 rounded px-0.5">$1</mark>',
   )
 })
 
-const typeLabel = computed(() => {
-  return { word: '單字', phrase: '片語', pattern: '句型' }[props.card.type] ?? props.card.type
+const chineseMeaningClass = computed(() => {
+  // Show Chinese in muted color when we already have a clear English definition
+  return dictData.value?.definition ? 'text-gray-400' : 'text-gray-300'
 })
 
-const typeBadgeClass = computed(() => {
-  return {
-    word: 'bg-blue-900 text-blue-300',
-    phrase: 'bg-purple-900 text-purple-300',
-    pattern: 'bg-green-900 text-green-300',
-  }[props.card.type] ?? 'bg-gray-800 text-gray-300'
-})
+const typeLabel = computed(() => ({ word: '單字', phrase: '片語', pattern: '句型' })[props.card.type] ?? props.card.type)
+
+const typeBadgeClass = computed(() => ({
+  word:    'bg-blue-900 text-blue-300',
+  phrase:  'bg-purple-900 text-purple-300',
+  pattern: 'bg-green-900 text-green-300',
+})[props.card.type] ?? 'bg-gray-800 text-gray-300')
 
 const frequencyLabel = computed(() => {
   const f = props.card.frequency ?? 0
-  if (f >= 5) return `🔥 出現 ${f} 次`
-  if (f >= 3) return `⚡ 出現 ${f} 次`
-  return `出現 ${f} 次`
+  if (f >= 5) return `🔥 ${f} 次`
+  if (f >= 3) return `⚡ ${f} 次`
+  return `${f} 次`
 })
 
-const TIER_LABELS = { 1: 'A1-A2', 2: 'B1', 3: 'B2', 4: 'C1+' }
-const TIER_TITLES = {
-  1: '基礎詞彙 (A1/A2)',
-  2: '中級詞彙 (B1)',
-  3: '學術詞彙 (B2)',
-  4: '進階詞彙 (C1+)',
-}
-const tierLabel = computed(() => TIER_LABELS[props.card.difficulty_tier] ?? '')
-const tierTitle = computed(() => TIER_TITLES[props.card.difficulty_tier] ?? '')
+const TIER_LABELS  = { 1: 'A1-A2', 2: 'B1', 3: 'B2', 4: 'C1+' }
+const TIER_TITLES  = { 1: '基礎詞彙 (A1/A2)', 2: '中級詞彙 (B1)', 3: '學術詞彙 (B2)', 4: '進階詞彙 (C1+)' }
+const tierLabel    = computed(() => TIER_LABELS[props.card.difficulty_tier] ?? '')
+const tierTitle    = computed(() => TIER_TITLES[props.card.difficulty_tier] ?? '')
 const tierBadgeClass = computed(() => {
   const t = props.card.difficulty_tier
   if (t === 4) return 'bg-purple-900 text-purple-300 border border-purple-700'

@@ -24,10 +24,9 @@ import cedict from '@/data/cedict.json'
 // B2 tier: Academic Word List + business vocabulary (713 words)
 const awlSet = new Set(awlWords.map(w => w.toLowerCase()))
 
-const MAX_WORDS    = 10
-const MAX_PHRASES  = 5
-const MAX_PATTERNS = 3
-const CLIP_MIN_S   = 3
+const MAX_WORDS   = 12  // increased from 10 (patterns removed, more room for words)
+const MAX_PHRASES = 5
+const CLIP_MIN_S  = 3
 const MIN_WORDS_BEFORE_FALLBACK = 5  // if fewer words pass tier, drop tier by 1
 
 // ── Always-excluded function words (POS tagging misses) ───────────────────────
@@ -241,8 +240,8 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
   let   minTier = minTierForLevel(level)
 
   // ── Step 1: Extract and score words ──────────────────────────────────────────
-  const wordFreq     = new Map()
-  const wordFirstSeg = new Map()
+  const wordFreq    = new Map()
+  const wordAllSegs = new Map()  // word → all segments where it appears
 
   for (const segment of transcript) {
     if (!segment.text) continue
@@ -258,8 +257,25 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
       if (w.length < minLen) continue
       if (STOPS_ALWAYS.has(w)) continue
       wordFreq.set(w, (wordFreq.get(w) || 0) + 1)
-      if (!wordFirstSeg.has(w)) wordFirstSeg.set(w, segment)
+      if (!wordAllSegs.has(w)) wordAllSegs.set(w, [])
+      wordAllSegs.get(w).push(segment)
     }
+  }
+
+  // Pick the best segment for a word: prefer complete sentences (≥5 words)
+  // where the word appears in the middle, choosing the shortest qualifying segment.
+  function pickBestSeg(word, segs) {
+    const complete = segs.filter(s => s.text.split(' ').length >= 5)
+    const pool = complete.length > 0 ? complete : segs
+    // Prefer segments where word is not the very first or last token
+    const notEdge = pool.filter(s => {
+      const words = s.text.toLowerCase().split(/\s+/)
+      const idx = words.findIndex(t => t.replace(/[^a-z]/g, '') === word)
+      return idx > 0 && idx < words.length - 1
+    })
+    const candidates = notEdge.length > 0 ? notEdge : pool
+    // Shortest among candidates = clearest context
+    return candidates.reduce((best, s) => s.text.length < best.text.length ? s : best)
   }
 
   // Tier-filtered ranking
@@ -282,7 +298,7 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     if (words.length >= MAX_WORDS) break
     if (seenKeywords.has(word)) continue
     seenKeywords.add(word)
-    const seg = wordFirstSeg.get(word)
+    const seg = pickBestSeg(word, wordAllSegs.get(word))
     words.push({
       type: 'word',
       keyword: word,
@@ -328,6 +344,8 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
   }
 
   const rankedPhrases = [...phraseFreq.entries()]
+    // Only keep phrases where at least one word is B1+ (tier ≥ 2) — filters noise
+    .filter(([phrase]) => phrase.split(' ').some(w => wordDifficultyTier(w) >= 2))
     .sort((a, b) => learningScore(b[0], b[1]) - learningScore(a[0], a[1]))
 
   const phrases = []
@@ -347,35 +365,8 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     })
   }
 
-  // ── Step 3: Sentence patterns ─────────────────────────────────────────────────
-  const patterns     = []
-  const seenPatterns = new Set()
-
-  for (const segment of transcript) {
-    if (!segment.text || patterns.length >= MAX_PATTERNS) continue
-    for (const sentence of nlp(segment.text).sentences().out('array')) {
-      if (patterns.length >= MAX_PATTERNS) break
-      const s = sentence.trim()
-      const wc = s.split(' ').length
-      if (wc < 4 || wc > 14 || seenPatterns.has(s)) continue
-      const hasModal       = /\b(should|would|could|might|must|need to|have to|going to|want to)\b/i.test(s)
-      const hasConditional = /\b(if|unless|when|whenever|while)\b/i.test(s)
-      if (!hasModal && !hasConditional) continue
-      seenPatterns.add(s)
-      patterns.push({
-        type: 'pattern',
-        keyword: s,
-        meaning_zh: hasModal ? '情態句型' : '條件句型',
-        frequency: 1,
-        difficulty_tier: 3,
-        sentence: segment.text,
-        ...getClip(segment),
-      })
-    }
-  }
-
-  // ── Step 4: Merge, sort, assign IDs ──────────────────────────────────────────
-  return [...words, ...phrases, ...patterns]
+  // ── Step 3: Merge, sort, assign IDs ──────────────────────────────────────────
+  return [...words, ...phrases]
     .sort((a, b) => learningScore(b.keyword, b.frequency) - learningScore(a.keyword, a.frequency))
     .map((item, index) => ({
       id: `${videoId}_${item.keyword.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
