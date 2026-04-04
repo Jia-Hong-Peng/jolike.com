@@ -17,6 +17,7 @@ export default defineConfig({
         review:   resolve(__dirname, 'review/index.html'),
         progress: resolve(__dirname, 'progress/index.html'),
         shadow:   resolve(__dirname, 'shadow/index.html'),
+        library:  resolve(__dirname, 'library/index.html'),
       },
     },
   },

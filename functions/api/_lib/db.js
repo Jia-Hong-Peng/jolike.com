@@ -81,3 +81,33 @@ export async function saveVideo(DB, { id, title, duration_seconds, transcript })
     .bind(id, title ?? '', duration_seconds ?? 0, analyzed_at, JSON.stringify(transcript))
     .run()
 }
+
+/**
+ * List all public (non-deleted) videos for the library, newest first.
+ * Returns only display metadata — no transcript (keeps response small).
+ * @param {D1Database} DB
+ * @param {{ limit?: number, offset?: number }} options
+ * @returns {Promise<Array<{id, title, duration_seconds, analyzed_at}>>}
+ */
+export async function getPublicVideos(DB, { limit = 50, offset = 0 } = {}) {
+  const { results } = await DB
+    .prepare(
+      'SELECT id, title, duration_seconds, analyzed_at FROM videos WHERE deleted_at IS NULL ORDER BY analyzed_at DESC LIMIT ? OFFSET ?'
+    )
+    .bind(limit, offset)
+    .all()
+  return results ?? []
+}
+
+/**
+ * Soft-delete a video from the public library (admin only).
+ * The cached transcript is preserved so existing sessions still work.
+ * @param {D1Database} DB
+ * @param {string} id - YouTube video ID
+ */
+export async function softDeleteVideo(DB, id) {
+  await DB
+    .prepare('UPDATE videos SET deleted_at = ? WHERE id = ?')
+    .bind(Math.floor(Date.now() / 1000), id)
+    .run()
+}

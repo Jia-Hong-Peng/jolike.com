@@ -94,13 +94,21 @@
       </ul>
     </div>
 
-    <!-- Progress link -->
-    <a
-      href="/progress/"
-      class="mt-8 text-gray-600 text-sm hover:text-gray-400 transition-colors"
-    >
-      查看詞彙進度 →
-    </a>
+    <!-- Bottom links -->
+    <div class="mt-8 flex flex-col items-center gap-3">
+      <a
+        href="/library/"
+        class="text-gray-400 text-sm hover:text-white transition-colors font-medium"
+      >
+        🎬 瀏覽影片庫
+      </a>
+      <a
+        href="/progress/"
+        class="text-gray-600 text-sm hover:text-gray-400 transition-colors"
+      >
+        查看詞彙進度 →
+      </a>
+    </div>
   </div>
 </template>
 

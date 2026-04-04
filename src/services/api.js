@@ -66,6 +66,53 @@ export async function getVideo(videoId) {
 }
 
 /**
+ * GET /api/library
+ * Fetch all public videos for the library page.
+ *
+ * @param {{ limit?: number, offset?: number }} options
+ * @returns {Promise<{videos: Array<{id,title,duration_seconds,analyzed_at}>}>}
+ */
+export async function getLibrary({ limit = 50, offset = 0 } = {}) {
+  let res
+  try {
+    res = await fetch(`${BASE}/api/library?limit=${limit}&offset=${offset}`)
+  } catch {
+    throw { error: 'NETWORK_ERROR', message: '請確認網路連線' }
+  }
+
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw { error: data.error || 'SERVER_ERROR', message: data.message || '載入失敗' }
+  }
+  return data
+}
+
+/**
+ * DELETE /api/library/:id
+ * Admin soft-delete a video from the library.
+ *
+ * @param {string} videoId
+ * @param {string} adminToken - Bearer token from env
+ */
+export async function deleteLibraryVideo(videoId, adminToken) {
+  let res
+  try {
+    res = await fetch(`${BASE}/api/library/${videoId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` },
+    })
+  } catch {
+    throw { error: 'NETWORK_ERROR', message: '請確認網路連線' }
+  }
+
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw { error: data.error || 'SERVER_ERROR', message: data.message || '刪除失敗' }
+  }
+  return data
+}
+
+/**
  * Map API error codes to user-facing messages.
  * @param {string} errorCode
  * @returns {string}
