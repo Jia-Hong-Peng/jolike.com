@@ -49,6 +49,8 @@ export async function fetchTranscript(videoId) {
         'User-Agent': BROWSER_UA,
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        // Bypass YouTube's GDPR consent page (shown to non-US Cloudflare IPs)
+        'Cookie': 'CONSENT=YES+cb; YSC=1; VISITOR_INFO1_LIVE=1',
       },
       signal: AbortSignal.timeout(8000),
     })
