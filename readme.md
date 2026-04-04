@@ -308,3 +308,95 @@ JoLike English
 * 對外介紹
 * Pitch Deck 初稿
 
+---
+
+# 🛠 開發者交接文件
+
+## 技術架構
+
+| 層 | 技術 |
+|---|---|
+| 前端 | Vue 3 + Vite（MPA，無 Router）+ Tailwind CSS v3 |
+| 後端 | Cloudflare Pages Functions（`functions/api/`）|
+| 資料庫 | Cloudflare D1（SQLite）binding 名稱固定為 `DB` |
+| 部署 | git push main → Cloudflare Pages 自動部署 |
+
+## 頁面路由
+
+| 路徑 | 說明 |
+|---|---|
+| `/` | InputPage — 貼 YouTube 連結，選模式 |
+| `/feed/?v={id}` | FeedPage — NLP 詞彙學習（TikTok 滑卡片）|
+| `/shadow/?v={id}` | ShadowingPage — 逐字幕跟讀模式 |
+| `/review/` | ReviewPage — SRS 間隔複習（Active Recall）|
+| `/progress/` | ProgressPage — 詞彙學習進度統計 |
+| `/library/` | LibraryPage — 全站公開影片庫 |
+
+## 本地開發
+
+```bash
+npm install
+npm run dev          # Vite dev server（port 5173，/api 自動 proxy 到 8788）
+
+# 初始化本地 D1（只需做一次）
+npx wrangler d1 execute DB --local --file=migrations/0001_schema.sql
+npx wrangler d1 execute DB --local --file=migrations/0002_push_subscriptions.sql
+npx wrangler d1 execute DB --local --file=migrations/0003_videos_soft_delete.sql
+
+# 啟動 Cloudflare Pages 本地環境（需先 npm run build）
+npm run build
+npx wrangler pages dev dist --d1=DB
+```
+
+## 環境變數（Cloudflare Pages Secrets）
+
+所有 secret 存放於 Cloudflare Pages 後台：  
+**Cloudflare Dashboard → Pages → jolike-english → Settings → Environment variables**
+
+| 變數名稱 | 用途 |
+|---|---|
+| `DB` | D1 binding（自動綁定，非 secret）|
+| `ADMIN_TOKEN` | 影片庫管理員刪除權限 token |
+| `VAPID_PRIVATE_JWK` | Web Push 私鑰 |
+| `PUSH_SEND_SECRET` | Push 發送 API 保護 |
+
+## 影片庫管理員功能
+
+管理員可刪除影片庫中的影片（軟刪除，字幕快取保留）。
+
+**取得 ADMIN_TOKEN 步驟：**
+1. 登入 [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. 進入 Pages → jolike-english → Settings → Environment variables
+3. 找到 `ADMIN_TOKEN`（值已加密，需重設才能看到）
+
+**使用方式（第一次）：**
+```
+https://jolike.com/library/?admin=<ADMIN_TOKEN 的值>
+```
+瀏覽器會將 token 存入 localStorage，之後直接進 `/library/` 即可看到每張影片右上角的刪除按鈕。
+
+**更換 token：**
+```bash
+npx wrangler pages secret put ADMIN_TOKEN --project-name jolike-english
+# 輸入新 token 值後 Enter
+```
+
+## D1 Migrations
+
+新增欄位或表格時，在 `migrations/` 新增 SQL 檔，然後執行：
+
+```bash
+# 遠端 production（使用 --command 避免 file import 權限問題）
+npx wrangler d1 execute jolike-english-db --remote --command="<SQL 語句>"
+
+# 本地測試
+npx wrangler d1 execute jolike-english-db --local --file=migrations/000X_xxx.sql
+```
+
+## 注意事項
+
+- **NLP 分析在前端執行**（`src/lib/nlp.js`），不跑在 Cloudflare Worker（10ms CPU 限制）
+- **learning_cards 不存 D1**，由 `nlp.js` 在瀏覽器即時產生
+- **SRS 資料存在使用者 localStorage**（key prefix：`jolike_srs_`）
+- 所有 SQL 必須使用 parameterized query（`?` 佔位符），禁止字串拼接
+
