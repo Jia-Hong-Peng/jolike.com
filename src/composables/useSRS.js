@@ -49,6 +49,7 @@ export function scheduleReview(card) {
     meaning_zh: card.meaning_zh ?? '',
     videoId: card.video_id,
     type: card.type,
+    difficulty_tier: card.difficulty_tier ?? 4,
     sentence: card.sentence ?? '',
     clip_start: card.clip_start ?? 0,
     clip_end: card.clip_end ?? 0,

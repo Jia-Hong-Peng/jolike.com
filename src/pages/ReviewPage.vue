@@ -1,7 +1,6 @@
 <template>
   <div class="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4">
-
-    <!-- No due cards -->
+<!-- No due cards -->
     <div v-if="!loading && dueCards.length === 0" class="text-center space-y-4">
       <p class="text-4xl">✅</p>
       <p class="text-white text-xl font-bold">沒有待複習單字</p>
@@ -15,12 +14,39 @@
     </div>
 
     <!-- Session complete -->
-    <div v-else-if="sessionComplete" class="text-center space-y-4">
+    <div v-else-if="sessionComplete" class="text-center space-y-4 w-full max-w-sm">
       <p class="text-4xl">🏆</p>
       <p class="text-white text-xl font-bold">複習完成！</p>
       <p class="text-gray-400 text-sm">共複習 {{ dueCards.length }} 個單字</p>
+
+      <!-- Push notification prompt (shown after first session) -->
+      <div v-if="showPushPrompt" class="bg-gray-800 rounded-2xl p-5 text-left space-y-3 border border-gray-700">
+        <p class="text-white font-semibold">🔔 開啟每日複習提醒？</p>
+        <p class="text-gray-400 text-sm">明天該複習時，JoLike 會通知你，讓記憶更穩固。</p>
+        <div class="flex gap-3">
+          <button
+            class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-semibold text-sm min-h-[44px]"
+            @click="enablePush"
+          >
+            開啟通知
+          </button>
+          <button
+            class="flex-1 bg-gray-700 text-gray-300 py-3 rounded-xl font-semibold text-sm min-h-[44px]"
+            @click="dismissPush"
+          >
+            不用了
+          </button>
+        </div>
+      </div>
+
       <button
-        class="mt-4 bg-blue-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg min-h-[56px]"
+        class="w-full bg-gray-700 text-gray-300 px-8 py-3 rounded-2xl font-semibold text-base min-h-[48px]"
+        @click="() => (window.location.href = '/progress/')"
+      >
+        查看詞彙進度 →
+      </button>
+      <button
+        class="w-full bg-blue-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg min-h-[56px]"
         @click="goHome"
       >
         回首頁
@@ -29,8 +55,7 @@
 
     <!-- Review card -->
     <div v-else-if="currentEntry" class="w-full max-w-sm space-y-4">
-
-      <!-- Progress indicator -->
+<!-- Progress indicator -->
       <p class="text-gray-500 text-sm text-center">
         {{ currentIdx + 1 }} / {{ dueCards.length }}
       </p>
@@ -75,7 +100,7 @@
           v-if="currentEntry.sentence"
           class="text-gray-400 text-sm leading-relaxed"
           v-html="highlightedSentence"
-        />
+        ></p>
       </div>
 
       <!-- Action buttons -->
@@ -94,25 +119,32 @@
         </button>
       </div>
     </div>
-
-  </div>
+</div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import VideoClip from '@/components/VideoClip.vue'
 import { getDue, markReview } from '@/composables/useSRS.js'
+import { subscribePush, isPushEnabled } from '@/composables/usePWA.js'
 
 const loading = ref(true)
 const dueCards = ref([])
 const currentIdx = ref(0)
 const sessionComplete = ref(false)
+const showPushPrompt = ref(false)
 
 const hasTTS = ref(typeof window !== 'undefined' && 'speechSynthesis' in window)
+const supportsPush = ref(typeof window !== 'undefined' && 'PushManager' in window && 'Notification' in window)
 
-onMounted(() => {
+onMounted(async () => {
   dueCards.value = getDue()
   loading.value = false
+  // Pre-check if push already enabled so we don't re-prompt
+  if (supportsPush.value) {
+    const already = await isPushEnabled()
+    if (already) showPushPrompt.value = false
+  }
 })
 
 const currentEntry = computed(() => dueCards.value[currentIdx.value] ?? null)
@@ -136,7 +168,7 @@ function speak(word) {
   window.speechSynthesis.speak(u)
 }
 
-function mark(outcome) {
+async function mark(outcome) {
   const entry = currentEntry.value
   if (!entry) return
   markReview(entry.word, outcome)
@@ -144,7 +176,20 @@ function mark(outcome) {
     currentIdx.value++
   } else {
     sessionComplete.value = true
+    // After first completed review session, offer push notifications
+    if (supportsPush.value && Notification.permission === 'default') {
+      showPushPrompt.value = true
+    }
   }
+}
+
+async function enablePush() {
+  showPushPrompt.value = false
+  await subscribePush()
+}
+
+function dismissPush() {
+  showPushPrompt.value = false
 }
 
 function goHome() {

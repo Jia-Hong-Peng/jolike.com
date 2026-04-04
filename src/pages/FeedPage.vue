@@ -1,14 +1,13 @@
 <template>
   <div class="min-h-screen bg-black text-white overflow-hidden relative">
-
-    <!-- Loading state -->
+<!-- Loading state -->
     <div v-if="loading" class="flex flex-col items-center justify-center min-h-screen gap-4">
       <!-- Card skeleton (animate-pulse) -->
       <div class="w-full max-w-sm px-4 space-y-3">
-        <div class="h-64 bg-gray-800 rounded-2xl animate-pulse" />
-        <div class="h-6 bg-gray-800 rounded animate-pulse w-1/3" />
-        <div class="h-8 bg-gray-800 rounded animate-pulse w-2/3" />
-        <div class="h-5 bg-gray-800 rounded animate-pulse w-1/2" />
+        <div class="h-64 bg-gray-800 rounded-2xl animate-pulse"></div>
+        <div class="h-6 bg-gray-800 rounded animate-pulse w-1/3"></div>
+        <div class="h-8 bg-gray-800 rounded animate-pulse w-2/3"></div>
+        <div class="h-5 bg-gray-800 rounded animate-pulse w-1/2"></div>
       </div>
       <p class="text-gray-500 text-sm">正在分析字幕，請稍候…</p>
     </div>
@@ -39,6 +38,12 @@
         複習到期單字（{{ dueCount }} 個）
       </button>
       <button
+        class="bg-gray-700 text-gray-300 px-8 py-3 rounded-2xl font-semibold text-base min-h-[48px] w-full max-w-xs"
+        @click="() => (window.location.href = '/progress/')"
+      >
+        查看詞彙進度 →
+      </button>
+      <button
         class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg min-h-[56px] w-full max-w-xs"
         @click="goHome"
       >
@@ -60,8 +65,8 @@
       >
         <LearningCard
           ref="cardRef"
-          :card="currentCard"
           :key="currentCard.id"
+          :card="currentCard"
         >
           <!-- US2: ShadowingPanel -->
           <ShadowingPanel
@@ -121,8 +126,7 @@
         @jump="onJumpToCard"
       />
     </Teleport>
-
-  </div>
+</div>
 </template>
 
 <script setup>

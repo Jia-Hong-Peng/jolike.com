@@ -12,9 +12,10 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        index:  resolve(__dirname, 'index.html'),
-        feed:   resolve(__dirname, 'feed/index.html'),
-        review: resolve(__dirname, 'review/index.html'),
+        index:    resolve(__dirname, 'index.html'),
+        feed:     resolve(__dirname, 'feed/index.html'),
+        review:   resolve(__dirname, 'review/index.html'),
+        progress: resolve(__dirname, 'progress/index.html'),
       },
     },
   },

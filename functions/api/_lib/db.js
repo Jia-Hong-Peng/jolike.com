@@ -27,6 +27,46 @@ export async function getVideo(DB, id) {
 }
 
 /**
+ * Save a Web Push subscription to D1.
+ * Uses INSERT OR REPLACE to handle re-subscriptions from the same browser.
+ * @param {D1Database} DB
+ * @param {{ endpoint: string, keys: { p256dh: string, auth: string } }} subscription
+ */
+export async function savePushSubscription(DB, subscription) {
+  const { endpoint, keys } = subscription
+  await DB
+    .prepare(
+      'INSERT OR REPLACE INTO push_subscriptions (endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?)'
+    )
+    .bind(endpoint, keys.p256dh, keys.auth, Math.floor(Date.now() / 1000))
+    .run()
+}
+
+/**
+ * Retrieve all push subscriptions.
+ * @param {D1Database} DB
+ * @returns {Promise<Array<{ endpoint, p256dh, auth }>>}
+ */
+export async function getAllPushSubscriptions(DB) {
+  const { results } = await DB
+    .prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions')
+    .all()
+  return results ?? []
+}
+
+/**
+ * Delete a push subscription by endpoint (used when push fails with 410 Gone).
+ * @param {D1Database} DB
+ * @param {string} endpoint
+ */
+export async function deletePushSubscription(DB, endpoint) {
+  await DB
+    .prepare('DELETE FROM push_subscriptions WHERE endpoint = ?')
+    .bind(endpoint)
+    .run()
+}
+
+/**
  * Insert a new video record into D1.
  * @param {D1Database} DB
  * @param {{ id: string, title: string, duration_seconds: number, transcript: Array }} video
