@@ -1,0 +1,29 @@
+# Build output
+dist/
+
+# Wrangler
+.wrangler/
+.dev.vars
+
+# Node
+node_modules/
+
+# Env
+*.env
+.env
+.env.*
+!.env.example
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
