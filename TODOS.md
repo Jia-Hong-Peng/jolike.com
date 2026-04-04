@@ -83,3 +83,19 @@ wrangler secret put PUSH_SEND_SECRET
 - LearningCard.vue: translation cache read/write
 - ReviewPage.vue: mark flow, push prompt trigger
 - analyze.js: oEmbed scenarios (needs Miniflare)
+
+---
+
+## P3 — Known-Words Soft Downrank (deferred from NLP algorithm rethink)
+
+**What:** Replace hard exclusion (`!knownWords.has(w)`) with soft downrank: mastered words still eligible but with score penalty (e.g., `× 0.1`), combined with time-decay based on interval.
+
+**Why:** Hard exclusion works well for small vocabularies (MVP). For users with 50+ mastered words, it aggressively filters high-quality words and over-relies on fallback/low-tier words. Soft downrank would let mastered words still appear occasionally (spaced repetition value) while strongly preferring new words.
+
+**Pros:** Better long-term learning quality; handles large SRS decks gracefully; words on the edge of mastery stay visible.
+
+**Cons:** More complex scoring formula; harder to explain to user ("why does this known word appear?"); requires tuning the penalty weight.
+
+**Context:** The current `reviews >= 3` hard exclusion is intentional for MVP simplicity. This item reconsiders that choice once vocabulary size justifies it. Implementation would be: replace `filter(([w]) => !knownWords.has(w))` with a score multiplier based on mastery level.
+
+**Depends on:** getKnownWords() infrastructure (being built in current PR)
