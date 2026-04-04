@@ -65,6 +65,27 @@ describe('nlp.js — card IDs', () => {
   })
 })
 
+// ── Morphological stem (double consonant comparatives/superlatives) ──────────
+describe('nlp.js — double-consonant stem fallback', () => {
+  it('T-STEM-1 — biggest is tier 1 (stems to big, an A1 word)', () => {
+    const items = extractLearningItems(
+      makeTranscript(['He is the biggest boy in the world and the most remarkable student.']),
+      'v1', 'beginner'
+    )
+    const biggest = items.find(i => i.keyword === 'biggest')
+    if (biggest) expect(biggest.difficulty_tier).toBe(1)
+  })
+
+  it('T-STEM-2 — bigger is tier 1 (stems to big, an A1 word)', () => {
+    const items = extractLearningItems(
+      makeTranscript(['She is bigger than her sister and demonstrates remarkable patience.']),
+      'v1', 'beginner'
+    )
+    const bigger = items.find(i => i.keyword === 'bigger')
+    if (bigger) expect(bigger.difficulty_tier).toBe(1)
+  })
+})
+
 // ── CEFR tier lookup ───────────────────────────────────────────────────────────
 // These words are in cefr_vocab.json with known levels
 const TRANSCRIPT_CEFR = makeTranscript([

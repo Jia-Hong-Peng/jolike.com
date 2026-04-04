@@ -67,8 +67,20 @@ function wordDifficultyTier(word) {
     stems.add(w.slice(0, -3) + 'e')   // using    → use
     stems.add(w.slice(0, -4))          // running  → run (double consonant)
   }
-  if (w.endsWith('er') && w.length > 4) stems.add(w.slice(0, -2))   // cheaper → cheap
-  if (w.endsWith('est') && w.length > 5) stems.add(w.slice(0, -3))  // cheapest → cheap
+  if (w.endsWith('er') && w.length > 4) {
+    const base = w.slice(0, -2)
+    stems.add(base)                                                   // cheaper → cheap
+    if (base.length >= 3 && base[base.length - 1] === base[base.length - 2]) {
+      stems.add(base.slice(0, -1))                                    // bigger  → big (double consonant)
+    }
+  }
+  if (w.endsWith('est') && w.length > 5) {
+    const base = w.slice(0, -3)
+    stems.add(base)                                                   // cheapest → cheap
+    if (base.length >= 3 && base[base.length - 1] === base[base.length - 2]) {
+      stems.add(base.slice(0, -1))                                    // biggest  → big (double consonant)
+    }
+  }
   if (w.endsWith('ed') && w.length > 4) {
     stems.add(w.slice(0, -2))          // started → start
     stems.add(w.slice(0, -1))          // moved   → move
