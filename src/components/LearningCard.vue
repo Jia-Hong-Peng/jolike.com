@@ -40,10 +40,21 @@
         </span>
       </div>
 
-      <!-- Keyword with highlight -->
-      <p class="text-2xl font-bold text-white leading-tight">
-        <mark class="bg-yellow-400 text-black px-1 rounded">{{ card.keyword }}</mark>
-      </p>
+      <!-- Keyword with TTS button -->
+      <div class="flex items-center gap-3">
+        <p class="text-2xl font-bold text-white leading-tight">
+          <mark class="bg-yellow-400 text-black px-1 rounded">{{ card.keyword }}</mark>
+        </p>
+        <button
+          v-if="hasTTS"
+          class="flex items-center justify-center w-9 h-9 rounded-full transition-colors min-h-[44px] min-w-[44px]"
+          :class="ttsAutoplay ? 'bg-blue-700 text-white' : 'bg-gray-700 text-gray-300'"
+          :title="ttsAutoplay ? '自動朗讀開啟（點擊關閉）' : '點擊朗讀'"
+          @click.stop="speak(card.keyword); toggleTTSAutoplay()"
+        >
+          🔊
+        </button>
+      </div>
 
       <!-- Chinese meaning (cedict if available, else auto-translated) -->
       <p class="text-gray-300 text-base">
@@ -84,12 +95,56 @@ const translating = ref(false)
 const translationText = ref('')
 const keywordMeaning = ref('')
 
+// TTS
+const hasTTS = ref(typeof window !== 'undefined' && 'speechSynthesis' in window)
+const ttsAutoplay = ref(localStorage.getItem('jolike_tts_autoplay') === 'true')
+
+function speak(word) {
+  if (!hasTTS.value) return
+  const utterance = new SpeechSynthesisUtterance(word)
+  utterance.lang = 'en-US'
+  utterance.rate = 0.85
+  window.speechSynthesis.cancel()
+  window.speechSynthesis.speak(utterance)
+}
+
+function toggleTTSAutoplay() {
+  ttsAutoplay.value = !ttsAutoplay.value
+  try {
+    localStorage.setItem('jolike_tts_autoplay', ttsAutoplay.value)
+  } catch { /* storage full — ignore */ }
+}
+
+const TRANS_LANGPAIR = 'en|zh-TW'
+
+function transCacheKey(text) {
+  return `jolike_trans_${TRANS_LANGPAIR}_${text}`
+}
+
+function transFromCache(text) {
+  try {
+    return localStorage.getItem(transCacheKey(text)) || null
+  } catch {
+    return null
+  }
+}
+
+function transToCache(text, result) {
+  try {
+    localStorage.setItem(transCacheKey(text), result)
+  } catch { /* storage full — skip */ }
+}
+
 async function translate(text) {
+  const cached = transFromCache(text)
+  if (cached !== null) return cached
   const res = await fetch(
-    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|zh-TW`
+    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${TRANS_LANGPAIR}`
   )
   const data = await res.json()
-  return data?.responseData?.translatedText || ''
+  const result = data?.responseData?.translatedText || ''
+  if (result) transToCache(text, result)
+  return result
 }
 
 async function fetchTranslation() {
@@ -112,8 +167,12 @@ async function fetchTranslation() {
   }
 }
 
-// Auto-translate when card changes
-watch(() => props.card.id, () => fetchTranslation(), { immediate: false })
+// Auto-play TTS when card changes (button-only on first load to respect mobile gesture barrier)
+watch(() => props.card.id, () => {
+  fetchTranslation()
+  if (ttsAutoplay.value && hasTTS.value) speak(props.card.keyword)
+})
+
 onMounted(() => fetchTranslation())
 
 // Expose clip control to parent (ShadowingPanel needs to stop video before recording)

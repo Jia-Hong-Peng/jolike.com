@@ -32,7 +32,14 @@
         <p class="text-gray-400 text-sm">共學習 {{ cards.length }} 張卡片</p>
       </div>
       <button
-        class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg min-h-[56px]"
+        v-if="dueCount > 0"
+        class="bg-yellow-500 text-black px-8 py-4 rounded-2xl font-semibold text-lg min-h-[56px] w-full max-w-xs"
+        @click="() => (window.location.href = '/review/')"
+      >
+        複習到期單字（{{ dueCount }} 個）
+      </button>
+      <button
+        class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg min-h-[56px] w-full max-w-xs"
         @click="goHome"
       >
         換影片
@@ -127,6 +134,7 @@ import VocabList from '@/components/VocabList.vue'
 import { getVideo } from '@/services/api.js'
 import { extractLearningItems } from '@/lib/nlp.js'
 import { useLearningSession } from '@/composables/useLearningSession.js'
+import { scheduleReview, getDue } from '@/composables/useSRS.js'
 
 // --- State ---
 const loading = ref(true)
@@ -166,6 +174,7 @@ const {
 } = useLearningSession(videoId, cards)
 
 const currentCard = computed(() => cards.value[currentIndex.value] ?? null)
+const dueCount = computed(() => getDue().length)
 
 // --- Lifecycle ---
 onMounted(async () => {
@@ -217,8 +226,12 @@ function animateCardOut(callback) {
 
 // --- ActionBar handler (US3) ---
 function onMark({ id, status }) {
+  const card = currentCard.value
   animateCardOut(() => {
     markCard(id, status)
+    if (status === 'unsure' && card) {
+      scheduleReview(card)
+    }
     next()
   })
 }
