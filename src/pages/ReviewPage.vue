@@ -233,17 +233,19 @@ function speak(word) {
   if (!hasTTS.value) return
   const u = new SpeechSynthesisUtterance(word)
   u.lang = 'en-US'
-  u.rate = 0.85
+  u.rate = 1.0
+  const voices = window.speechSynthesis.getVoices()
+  const enUS = voices.filter(v => v.lang === 'en-US' || v.lang === 'en_US')
+  const best = enUS.find(v => /google|neural|enhanced/i.test(v.name))
+    || enUS.find(v => !v.localService)
+    || enUS[0]
+  if (best) u.voice = best
   window.speechSynthesis.cancel()
   window.speechSynthesis.speak(u)
 }
 
 function reveal() {
   phase.value = 'revealed'
-  // Auto-speak the word on reveal
-  if (hasTTS.value && currentEntry.value) {
-    speak(currentEntry.value.word)
-  }
 }
 
 function mark(outcome) {

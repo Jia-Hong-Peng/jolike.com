@@ -43,9 +43,8 @@
           </p>
           <button
             v-if="hasTTS"
-            class="flex items-center justify-center w-11 h-11 min-h-[44px] min-w-[44px] rounded-full transition-colors"
-            :class="ttsAutoplay ? 'bg-blue-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'"
-            :title="ttsAutoplay ? '自動朗讀開啟（點擊關閉）' : '點擊朗讀 / 長按切換自動播放'"
+            class="flex items-center justify-center w-11 h-11 min-h-[44px] min-w-[44px] rounded-full transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600"
+            title="朗讀單字"
             @click.stop="onTTSClick"
           >
             🔊
@@ -103,21 +102,25 @@ const dictData        = ref(null)  // { phonetic, partOfSpeech, definition, exam
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
 const hasTTS = ref(typeof window !== 'undefined' && 'speechSynthesis' in window)
-const ttsAutoplay = ref(localStorage.getItem('jolike_tts_autoplay') === 'true')
 
 function speak(word) {
   if (!hasTTS.value) return
   const u = new SpeechSynthesisUtterance(word)
   u.lang = 'en-US'
-  u.rate = 0.85
+  u.rate = 1.0
+  // Pick the best available en-US voice (Google/neural > local default)
+  const voices = window.speechSynthesis.getVoices()
+  const enUS = voices.filter(v => v.lang === 'en-US' || v.lang === 'en_US')
+  const best = enUS.find(v => /google|neural|enhanced/i.test(v.name))
+    || enUS.find(v => !v.localService)
+    || enUS[0]
+  if (best) u.voice = best
   window.speechSynthesis.cancel()
   window.speechSynthesis.speak(u)
 }
 
 function onTTSClick() {
   speak(props.card.keyword)
-  ttsAutoplay.value = !ttsAutoplay.value
-  try { localStorage.setItem('jolike_tts_autoplay', ttsAutoplay.value) } catch {}
 }
 
 // ── Translation cache ─────────────────────────────────────────────────────────
@@ -164,8 +167,6 @@ async function loadCardData() {
     translationText.value = sentence
     keywordMeaning.value  = keyword
 
-    // Auto-play TTS when card loads (only if autoplay pref is on)
-    if (ttsAutoplay.value && hasTTS.value) speak(props.card.keyword)
   } catch {
     // fail silently
   } finally {
