@@ -37,6 +37,24 @@ function writeEntry(key, data) {
 }
 
 /**
+ * Returns a Set of words the user has mastered (reviews >= 3).
+ * Used by nlp.js to skip already-mastered words during extraction.
+ * @returns {Set<string>}
+ */
+export function getKnownWords() {
+  const known = new Set()
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key?.startsWith(PREFIX)) continue
+    try {
+      const entry = JSON.parse(localStorage.getItem(key) || '{}')
+      if ((entry.reviews ?? 0) >= 3) known.add(entry.word)
+    } catch { /* skip corrupt entry */ }
+  }
+  return known
+}
+
+/**
  * Schedule a card for review starting tomorrow.
  * Called when user marks a card 'unsure' during learning.
  * @param {Object} card — full learning card object from nlp.js

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { scheduleReview, getDue, markReview, getStreak } from '../src/composables/useSRS.js'
+import { scheduleReview, getDue, markReview, getStreak, getKnownWords } from '../src/composables/useSRS.js'
 
 const MOCK_CARD = {
   keyword: 'run',
@@ -187,5 +187,45 @@ describe('getStreak', () => {
     markReview('run', 'known')
     const { streak } = getStreak()
     expect(streak).toBe(5)
+  })
+})
+
+describe('getKnownWords', () => {
+  it('T-GKW-1 — word with reviews >= 3 is included in returned Set', () => {
+    scheduleReview(MOCK_CARD)
+    const entry = JSON.parse(localStorage.getItem('jolike_srs_run'))
+    entry.reviews = 3
+    localStorage.setItem('jolike_srs_run', JSON.stringify(entry))
+    const known = getKnownWords()
+    expect(known.has('run')).toBe(true)
+  })
+
+  it('T-GKW-2 — words with reviews 0, 1, 2 are NOT in the Set', () => {
+    for (const reviews of [0, 1, 2]) {
+      localStorage.clear()
+      scheduleReview(MOCK_CARD)
+      const entry = JSON.parse(localStorage.getItem('jolike_srs_run'))
+      entry.reviews = reviews
+      localStorage.setItem('jolike_srs_run', JSON.stringify(entry))
+      const known = getKnownWords()
+      expect(known.has('run')).toBe(false)
+    }
+  })
+
+  it('T-GKW-3 — empty localStorage returns empty Set', () => {
+    const known = getKnownWords()
+    expect(known.size).toBe(0)
+  })
+
+  it('T-GKW-4 — non-SRS localStorage keys are ignored', () => {
+    localStorage.setItem('jolike_trans_run', 'something')
+    localStorage.setItem('jolike_streak', JSON.stringify({ streak: 5 }))
+    scheduleReview(MOCK_CARD)
+    const entry = JSON.parse(localStorage.getItem('jolike_srs_run'))
+    entry.reviews = 3
+    localStorage.setItem('jolike_srs_run', JSON.stringify(entry))
+    const known = getKnownWords()
+    expect(known.size).toBe(1)
+    expect(known.has('run')).toBe(true)
   })
 })
