@@ -160,18 +160,25 @@ async function loadCardData() {
   dictData.value        = null
 
   try {
-    const tasks = [
-      // 1. Free Dictionary for words (phonetic + definition)
+    // Phase 1: dictionary + sentence translation (parallel, independent)
+    const [dict, sentence] = await Promise.all([
       props.card.type === 'word' ? lookupDefinition(props.card.keyword) : Promise.resolve(null),
-      // 2. Sentence translation (MyMemory)
       props.card.sentence ? translateText(props.card.sentence) : Promise.resolve(''),
-      // 3. Keyword translation (MyMemory, only when cedict misses)
-      props.card.meaning_zh === '—' ? translateText(props.card.keyword) : Promise.resolve(''),
-    ]
-    const [dict, sentence, keyword] = await Promise.all(tasks)
+    ])
     dictData.value        = dict
     translationText.value = sentence
-    keywordMeaning.value  = keyword
+
+    // Phase 2: Chinese keyword meaning (needs dict result from phase 1)
+    // Informal/slang words (e.g. "comfy") often fail direct translation.
+    // Translating the English definition ("Comfortable") works much better.
+    if (props.card.meaning_zh === '—') {
+      const source = dict?.definition?.replace(/\.$/, '') || props.card.keyword
+      const result = await translateText(source)
+      // Discard identity translations (MyMemory returned the input unchanged = fail)
+      if (result && result.toLowerCase() !== source.toLowerCase()) {
+        keywordMeaning.value = result
+      }
+    }
 
   } catch {
     // fail silently
