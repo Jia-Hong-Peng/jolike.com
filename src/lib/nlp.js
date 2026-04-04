@@ -52,6 +52,87 @@ const STOPS_ALWAYS = new Set([
 ])
 
 
+// ── Morphological stem generation ─────────────────────────────────────────────
+// Returns candidate base forms for an inflected word (ordered: most likely first)
+function morphStems(w) {
+  const stems = []
+  if (w.endsWith('ing') && w.length > 5) {
+    stems.push(w.slice(0, -3))           // cooling    → cool
+    stems.push(w.slice(0, -3) + 'e')    // using      → use, chaperoning → chaperone
+    stems.push(w.slice(0, -4))           // running    → run (double consonant)
+  }
+  if (w.endsWith('er') && w.length > 4) {
+    const base = w.slice(0, -2)
+    stems.push(base)                     // cheaper    → cheap
+    if (base.length >= 3 && base[base.length - 1] === base[base.length - 2]) {
+      stems.push(base.slice(0, -1))      // bigger     → big (double consonant)
+    }
+  }
+  if (w.endsWith('est') && w.length > 5) {
+    const base = w.slice(0, -3)
+    stems.push(base)                     // cheapest   → cheap
+    if (base.length >= 3 && base[base.length - 1] === base[base.length - 2]) {
+      stems.push(base.slice(0, -1))      // biggest    → big (double consonant)
+    }
+  }
+  if (w.endsWith('ed') && w.length > 4) {
+    stems.push(w.slice(0, -2))           // started    → start
+    stems.push(w.slice(0, -1))           // moved      → move
+    stems.push(w.slice(0, -3))           // stopped    → stop (double)
+  }
+  if (w.endsWith('ly') && w.length > 4) stems.push(w.slice(0, -2))   // quickly → quick
+  if (w.endsWith('tion') && w.length > 6) stems.push(w.slice(0, -3)) // reduction → reduc
+  if (w.endsWith('ness') && w.length > 6) stems.push(w.slice(0, -4)) // darkness → dark
+  if (w.endsWith('ment') && w.length > 6) stems.push(w.slice(0, -4)) // movement → move
+  if (w.endsWith('ity') && w.length > 6) stems.push(w.slice(0, -3))  // ability → abil
+  if (w.endsWith('ical') && w.length > 6) stems.push(w.slice(0, -4)) // historical → histor
+  if (w.endsWith('s') && w.length > 4 && !w.endsWith('ss')) {
+    stems.push(w.slice(0, -1))           // cars → car
+    stems.push(w.slice(0, -2))           // houses → hous (rough)
+  }
+  return stems
+}
+
+// ── Canonical (lemma) form ─────────────────────────────────────────────────────
+// Returns the base/dictionary form of a word for display and lookup.
+// e.g. chaperoning → chaperone, biggest → big, running → run
+//
+// Strategy: among the word itself and all its morphological stems, pick the
+// SHORTEST one that appears in a vocabulary list. cefr_vocab includes inflected
+// forms (e.g. "running" is listed alongside "run"), so "already in vocab" does
+// not mean "base form" — we must prefer the shorter vocab entry.
+function canonicalForm(word) {
+  const w = word.toLowerCase()
+
+  // Collect all candidates: original + morphological stems
+  const candidates = [w, ...morphStems(w)]
+
+  // Pick the shortest candidate that is attested in any vocabulary list
+  let best = null
+  for (const c of candidates) {
+    if (c.length < 2) continue
+    const inVocab = cefrMap[c] !== undefined || awlSet.has(c)
+    if (inVocab && (best === null || c.length < best.length)) best = c
+  }
+  if (best !== null) return best
+
+  // Heuristic for unknown -ing words (base form not in any vocab list)
+  // chaperoning → chaperone, running → run
+  if (w.endsWith('ing') && w.length > 4) {
+    const plain = w.slice(0, -3)
+    if (plain.length >= 2) {
+      // Double consonant: running → runn → run
+      if (plain.length >= 3 && plain[plain.length - 1] === plain[plain.length - 2]) {
+        return plain.slice(0, -1)
+      }
+      // +e form: chaperoning → chaperone
+      return plain + 'e'
+    }
+  }
+
+  return w  // unknown word with no matching stem — keep as-is
+}
+
 // ── Difficulty tier lookup (CEFR-based with morphological stem fallback) ──────
 // Returns 1=A1/A2, 2=B1, 3=B2, 4=C1/C2
 function wordDifficultyTier(word) {
@@ -60,42 +141,7 @@ function wordDifficultyTier(word) {
   // Direct lookup in CEFR vocabulary
   if (cefrMap[w] !== undefined) return cefrMap[w]
 
-  // Morphological stem fallback — handles inflected forms not in the CEFR list
-  const stems = new Set()
-  if (w.endsWith('ing') && w.length > 5) {
-    stems.add(w.slice(0, -3))          // cooling  → cool
-    stems.add(w.slice(0, -3) + 'e')   // using    → use
-    stems.add(w.slice(0, -4))          // running  → run (double consonant)
-  }
-  if (w.endsWith('er') && w.length > 4) {
-    const base = w.slice(0, -2)
-    stems.add(base)                                                   // cheaper → cheap
-    if (base.length >= 3 && base[base.length - 1] === base[base.length - 2]) {
-      stems.add(base.slice(0, -1))                                    // bigger  → big (double consonant)
-    }
-  }
-  if (w.endsWith('est') && w.length > 5) {
-    const base = w.slice(0, -3)
-    stems.add(base)                                                   // cheapest → cheap
-    if (base.length >= 3 && base[base.length - 1] === base[base.length - 2]) {
-      stems.add(base.slice(0, -1))                                    // biggest  → big (double consonant)
-    }
-  }
-  if (w.endsWith('ed') && w.length > 4) {
-    stems.add(w.slice(0, -2))          // started → start
-    stems.add(w.slice(0, -1))          // moved   → move
-    stems.add(w.slice(0, -3))          // stopped → stop (double)
-  }
-  if (w.endsWith('ly') && w.length > 4) stems.add(w.slice(0, -2))   // quickly → quick
-  if (w.endsWith('tion') && w.length > 6) stems.add(w.slice(0, -3)) // reduction → reduc
-  if (w.endsWith('ness') && w.length > 6) stems.add(w.slice(0, -4)) // darkness → dark
-  if (w.endsWith('ment') && w.length > 6) stems.add(w.slice(0, -4)) // movement → move
-  if (w.endsWith('ity') && w.length > 6) stems.add(w.slice(0, -3))  // ability → abil
-  if (w.endsWith('ical') && w.length > 6) stems.add(w.slice(0, -4)) // historical → histor
-  if (w.endsWith('s') && w.length > 4 && !w.endsWith('ss')) {
-    stems.add(w.slice(0, -1))          // cars → car
-    stems.add(w.slice(0, -2))          // houses → hous (rough)
-  }
+  const stems = new Set(morphStems(w))
 
   let bestTier = null
   for (const stem of stems) {
@@ -228,13 +274,16 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
   const words = []
   for (const [word, freq] of rankedWords) {
     if (words.length >= MAX_WORDS) break
-    if (seenKeywords.has(word)) continue
-    seenKeywords.add(word)
+    // Normalize to canonical (lemma) form so card shows "chaperone" not "chaperoning"
+    const canonical = canonicalForm(word)
+    if (seenKeywords.has(canonical)) continue  // deduplicate variants (run/running → both "run")
+    seenKeywords.add(canonical)
     const seg = pickBestSeg(word, wordAllSegs.get(word))
     words.push({
       type: 'word',
-      keyword: word,
-      meaning_zh: lookupMeaning(word),
+      keyword: canonical,                          // base/dictionary form for display & TTS
+      keyword_raw: canonical !== word ? word : undefined,  // original inflected form for highlighting
+      meaning_zh: lookupMeaning(canonical),        // lookup with base form → better cedict hit
       frequency: freq,
       difficulty_tier: wordDifficultyTier(word),
       sentence: seg.text,

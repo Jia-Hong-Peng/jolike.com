@@ -201,9 +201,13 @@ defineExpose({
 // ── Display computed ──────────────────────────────────────────────────────────
 const highlightedSentence = computed(() => {
   if (!props.card.sentence) return ''
-  const kw = props.card.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  // Match both canonical form ("chaperone") and original inflected form ("chaperoning")
+  const pattern = props.card.keyword_raw
+    ? `(${esc(props.card.keyword)}|${esc(props.card.keyword_raw)})`
+    : `(${esc(props.card.keyword)})`
   return props.card.sentence.replace(
-    new RegExp(`(${kw})`, 'gi'),
+    new RegExp(pattern, 'gi'),
     '<mark class="bg-yellow-400/30 text-yellow-300 rounded px-0.5">$1</mark>',
   )
 })

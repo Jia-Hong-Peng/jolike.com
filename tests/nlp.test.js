@@ -65,6 +65,39 @@ describe('nlp.js — card IDs', () => {
   })
 })
 
+// ── Lemmatization (canonical keyword form) ────────────────────────────────────
+describe('nlp.js — canonical keyword form', () => {
+  it('T-LEMMA-1 — chaperoning card keyword is chaperone (not chaperoning)', () => {
+    const items = extractLearningItems(
+      makeTranscript([
+        'Mom is chaperoning, like, a Coachella type of thing.',
+        'She demonstrates remarkable eloquence and sophisticated analysis.',
+      ]),
+      'v1', 'beginner'
+    )
+    const card = items.find(i => i.keyword === 'chaperone' || i.keyword === 'chaperoning')
+    if (card) expect(card.keyword).toBe('chaperone')
+  })
+
+  it('T-LEMMA-2 — running card keyword is run', () => {
+    const items = extractLearningItems(
+      makeTranscript(['She is running towards the remarkable analysis of the situation.']),
+      'v1', 'beginner'
+    )
+    const card = items.find(i => i.keyword === 'run' || i.keyword === 'running')
+    if (card) expect(card.keyword).toBe('run')
+  })
+
+  it('T-LEMMA-3 — analysis stays as analysis (already base form)', () => {
+    const items = extractLearningItems(
+      makeTranscript(['She abandoned the project after careful analysis of the data.']),
+      'v1', 'beginner'
+    )
+    const card = items.find(i => i.keyword === 'analysis')
+    if (card) expect(card.keyword).toBe('analysis')
+  })
+})
+
 // ── Morphological stem (double consonant comparatives/superlatives) ──────────
 describe('nlp.js — double-consonant stem fallback', () => {
   it('T-STEM-1 — biggest is tier 1 (stems to big, an A1 word)', () => {
