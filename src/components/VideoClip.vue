@@ -16,8 +16,9 @@
       </div>
     </div>
 
-    <!-- Replay button (bottom-right, always visible) -->
+    <!-- Replay button (bottom-right, hidden in shadow mode) -->
     <button
+      v-if="!hideControls"
       class="absolute bottom-4 right-4 bg-black/60 text-white rounded-full
              w-11 h-11 flex items-center justify-center text-lg z-20
              hover:bg-black/80 transition-colors"
@@ -33,28 +34,28 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 
 const props = defineProps({
-  videoId: { type: String, required: true },
-  start:   { type: Number, required: true },
-  end:     { type: Number, required: true },
+  videoId:      { type: String,  required: true },
+  start:        { type: Number,  required: true },
+  end:          { type: Number,  required: true },
+  hideControls: { type: Boolean, default: false },
+  // seamless: video keeps playing without pause/seek between segments (autoplay mode)
+  seamless:     { type: Boolean, default: false },
 })
 
+const emit = defineEmits(['ended'])
+
 const iframeContainer = ref(null)
-const showPlayOverlay = ref(true)  // shown until video actually starts playing
+const showPlayOverlay = ref(true)
 let player = null
 let intervalId = null
+let lastEmittedEnd = -1   // dedup guard for seamless mode
 
 // --- YouTube IFrame API loader ---
 function loadYTApi() {
   return new Promise((resolve) => {
-    if (window.YT && window.YT.Player) {
-      resolve()
-      return
-    }
+    if (window.YT && window.YT.Player) { resolve(); return }
     const prev = window.onYouTubeIframeAPIReady
-    window.onYouTubeIframeAPIReady = () => {
-      if (prev) prev()
-      resolve()
-    }
+    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); resolve() }
     if (!document.getElementById('yt-iframe-api')) {
       const tag = document.createElement('script')
       tag.id = 'yt-iframe-api'
@@ -84,15 +85,12 @@ async function initPlayer() {
       start: Math.floor(props.start),
     },
     events: {
-      onReady: () => {
-        play()
-      },
+      onReady: () => { play() },
       onStateChange: (e) => {
-        // YT.PlayerState: PLAYING=1, PAUSED=2, ENDED=0, BUFFERING=3, CUED=5, UNSTARTED=-1
         if (e.data === 1 || e.data === 3) {
-          showPlayOverlay.value = false  // playing or buffering → hide overlay
+          showPlayOverlay.value = false
         } else {
-          showPlayOverlay.value = true   // paused / ended / unstarted → show overlay
+          if (!props.seamless) showPlayOverlay.value = true
         }
       },
     },
@@ -102,22 +100,35 @@ async function initPlayer() {
 function play() {
   if (!player || typeof player.seekTo !== 'function') return
   clearInterval(intervalId)
+  lastEmittedEnd = -1
   showPlayOverlay.value = false
   player.seekTo(props.start, true)
   player.playVideo()
+  startInterval()
+}
 
+function startInterval() {
   intervalId = setInterval(() => {
     try {
       const current = player.getCurrentTime()
       if (current >= props.end) {
-        player.pauseVideo()
-        clearInterval(intervalId)
-        showPlayOverlay.value = true
+        if (props.seamless) {
+          // Never pause — just signal the boundary and keep playing
+          if (props.end !== lastEmittedEnd) {
+            lastEmittedEnd = props.end
+            emit('ended')
+          }
+        } else {
+          player.pauseVideo()
+          clearInterval(intervalId)
+          showPlayOverlay.value = true
+          emit('ended')
+        }
       }
     } catch {
       clearInterval(intervalId)
     }
-  }, 200)
+  }, 100)
 }
 
 function stop() {
@@ -129,9 +140,7 @@ function stop() {
 
 defineExpose({ play, stop })
 
-onMounted(() => {
-  initPlayer()
-})
+onMounted(() => { initPlayer() })
 
 onBeforeUnmount(() => {
   clearInterval(intervalId)
@@ -140,7 +149,14 @@ onBeforeUnmount(() => {
   }
 })
 
-// Re-init player when videoId changes (navigating between cards)
+// Only seek on start change when NOT in seamless mode (manual segment switch)
+watch(() => props.start, () => {
+  if (!props.seamless && player && typeof player.seekTo === 'function') {
+    play()
+  }
+})
+
+// Re-init player when videoId changes
 watch(() => props.videoId, () => {
   showPlayOverlay.value = true
   if (player && typeof player.loadVideoById === 'function') {
@@ -151,11 +167,9 @@ watch(() => props.videoId, () => {
 </script>
 
 <style scoped>
-/* Force YouTube iframe to fill the container */
 :deep(iframe) {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 0; left: 0;
   width: 100% !important;
   height: 100% !important;
 }
