@@ -1,0 +1,91 @@
+/**
+ * POST /api/analyze
+ * Accepts a YouTube URL, fetches English subtitles, caches to D1, returns transcript.
+ * NLP analysis is performed client-side (compromise.js).
+ */
+
+import { extractVideoId, fetchTranscript } from './_lib/youtube.js'
+import { getVideo, saveVideo } from './_lib/db.js'
+
+export async function onRequestPost(context) {
+  const { request, env } = context
+  const DB = env.DB
+
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return jsonError(400, 'INVALID_URL', '請輸入有效的 YouTube 連結')
+  }
+
+  const { url } = body || {}
+
+  // Validate URL
+  const videoId = extractVideoId(url || '')
+  if (!videoId) {
+    return jsonError(400, 'INVALID_URL', '請輸入有效的 YouTube 連結')
+  }
+
+  // Check D1 cache first
+  const cached = await getVideo(DB, videoId)
+  if (cached) {
+    return jsonOk({
+      video: {
+        id: cached.id,
+        title: cached.title,
+        duration_seconds: cached.duration_seconds,
+      },
+      transcript: cached.raw_transcript,
+      cached: true,
+    })
+  }
+
+  // Fetch from YouTube timedtext
+  const result = await fetchTranscript(videoId)
+
+  if (result.error === 'NO_CAPTIONS') {
+    return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
+  }
+  if (result.error) {
+    return jsonError(500, 'ANALYSIS_FAILED', '分析失敗，請稍後再試')
+  }
+
+  const { transcript } = result
+
+  // Estimate duration from last segment
+  const lastSeg = transcript[transcript.length - 1]
+  const duration_seconds = lastSeg ? Math.ceil(lastSeg.start + lastSeg.dur) : 0
+
+  // Persist to D1
+  try {
+    await saveVideo(DB, {
+      id: videoId,
+      title: '',           // timedtext endpoint does not return title
+      duration_seconds,
+      transcript,
+    })
+  } catch (err) {
+    console.error('D1 save error:', err)
+    // Non-fatal: still return transcript to client
+  }
+
+  return jsonOk({
+    video: { id: videoId, title: '', duration_seconds },
+    transcript,
+    cached: false,
+  })
+}
+
+function jsonOk(data) {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function jsonError(status, error, message) {
+  return new Response(JSON.stringify({ error, message }), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}

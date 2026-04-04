@@ -1,0 +1,8 @@
+name = "jolike-english"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "./dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jolike-english-db"
+database_id = "453c110d-21f7-4576-90fc-5284f5f28811"
