@@ -65,8 +65,9 @@
       </p>
 
       <!-- Chinese meaning: cedict → MyMemory fallback -->
+      <!-- meaning_zh is '' (empty) when not in cedict, not '—' -->
       <p class="text-base" :class="chineseMeaningClass">
-        <span v-if="card.meaning_zh !== '—'">{{ card.meaning_zh }}</span>
+        <span v-if="card.meaning_zh">{{ card.meaning_zh }}</span>
         <span v-else-if="keywordMeaning">{{ keywordMeaning }}</span>
         <span v-else-if="translating" class="text-gray-600 text-sm italic">翻譯中…</span>
         <span v-else class="text-gray-600 text-sm italic">—</span>
@@ -169,9 +170,10 @@ async function loadCardData() {
     translationText.value = sentence
 
     // Phase 2: Chinese keyword meaning (needs dict result from phase 1)
+    // meaning_zh is '' when not in cedict (lookupMeaning returns '' not '—')
     // Informal/slang words (e.g. "comfy") often fail direct translation.
     // Translating the English definition ("Comfortable") works much better.
-    if (props.card.meaning_zh === '—') {
+    if (!props.card.meaning_zh) {
       const source = dict?.definition?.replace(/\.$/, '') || props.card.keyword
       const result = await translateText(source)
       // Discard identity translations (MyMemory returned the input unchanged = fail)
