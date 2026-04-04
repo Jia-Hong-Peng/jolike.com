@@ -28,7 +28,3 @@ npm-debug.log*
 # Test coverage
 coverage/
 .gstack/
-
-# Claude Code / AI tools (local only)
-.claude/
-.specify/

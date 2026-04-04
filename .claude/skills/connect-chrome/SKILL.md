@@ -1,0 +1,1 @@
+/Users/doge/Developer/repos/jolike.com/.claude/skills/gstack/connect-chrome/SKILL.md

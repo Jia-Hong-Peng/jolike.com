@@ -1,0 +1,1 @@
+/Users/doge/Developer/repos/jolike.com/.claude/skills/gstack/qa-only/SKILL.md
