@@ -1,7 +1,6 @@
 <template>
   <div class="min-h-screen bg-black text-white px-4 py-8 max-w-sm mx-auto">
-
-    <!-- Header -->
+<!-- Header -->
     <div class="flex items-center gap-3 mb-8">
       <button
         class="w-10 h-10 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
@@ -27,6 +26,17 @@
 
     <!-- Stats -->
     <div v-else class="space-y-6">
+<!-- Streak banner -->
+      <div
+        v-if="streak > 0"
+        class="rounded-2xl p-4 text-center"
+        :class="streak >= 7 ? 'bg-orange-900/60 border border-orange-700' : 'bg-gray-900'"
+      >
+        <p class="text-3xl font-bold" :class="streak >= 7 ? 'text-orange-400' : 'text-yellow-400'">
+          🔥 {{ streak }} 天
+        </p>
+        <p class="text-gray-400 text-xs mt-1">連續複習天數</p>
+      </div>
 
       <!-- Overview cards -->
       <div class="grid grid-cols-2 gap-3">
@@ -116,13 +126,13 @@
       >
         複習到期單字（{{ dueCount }} 個）
       </button>
-
-    </div>
+</div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import { getStreak } from '@/composables/useSRS.js'
 
 const MS_PER_DAY = 86400 * 1000
 const PREFIX = 'jolike_srs_'
@@ -143,6 +153,7 @@ function getAllEntries() {
 
 const entries = getAllEntries()
 const now = Date.now()
+const { streak } = getStreak()
 
 const totalWords = computed(() => entries.length)
 const dueCount = computed(() => entries.filter(e => e.nextReview <= now).length)

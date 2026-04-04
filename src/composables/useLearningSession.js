@@ -4,7 +4,7 @@
  * Key: jolike_session_{videoId}
  */
 
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 
 export function useLearningSession(videoId, cards) {
   const currentIndex = ref(0)

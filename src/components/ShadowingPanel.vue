@@ -35,7 +35,7 @@
 import { computed, onBeforeUnmount } from 'vue'
 import { useShadowing } from '@/composables/useShadowing.js'
 
-const props = defineProps({
+defineProps({
   card: { type: Object, required: true },
 })
 

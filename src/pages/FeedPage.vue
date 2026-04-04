@@ -130,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import LearningCard from '@/components/LearningCard.vue'
 import ShadowingPanel from '@/components/ShadowingPanel.vue'
 import ActionBar from '@/components/ActionBar.vue'
@@ -182,6 +182,8 @@ const dueCount = computed(() => getDue().length)
 
 // --- Lifecycle ---
 onMounted(async () => {
+  window.addEventListener('keydown', onKeyDown)
+
   if (!videoId) {
     error.value = '缺少影片 ID，請重新輸入 YouTube 連結'
     loading.value = false
@@ -253,6 +255,24 @@ function cycleLevel() {
   const idx = LEVELS.findIndex(l => l.key === level.value)
   level.value = LEVELS[(idx + 1) % LEVELS.length].key
 }
+
+// Keyboard navigation (desktop: ↓/→ = known, ↑/← = unsure)
+function onKeyDown(e) {
+  if (!currentCard.value || isComplete.value) return
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+    e.preventDefault()
+    animateCardOut(() => { markCard(currentCard.value?.id, 'known'); next() })
+  } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+    e.preventDefault()
+    const card = currentCard.value
+    animateCardOut(() => {
+      markCard(card?.id, 'unsure')
+      if (card) scheduleReview(card)
+      next()
+    })
+  }
+}
+onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 // When level changes, re-extract from cached transcript and reset session
 watch(level, (newLevel) => {

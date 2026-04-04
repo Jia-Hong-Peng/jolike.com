@@ -1,7 +1,6 @@
 <template>
   <div class="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4">
-
-    <!-- No due cards -->
+<!-- No due cards -->
     <div v-if="!loading && dueCards.length === 0" class="text-center space-y-4">
       <p class="text-4xl">✅</p>
       <p class="text-white text-xl font-bold">沒有待複習單字</p>

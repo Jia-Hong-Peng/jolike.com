@@ -82,6 +82,36 @@ export function getDue() {
 }
 
 /**
+ * Returns the current daily review streak (consecutive days with ≥1 review).
+ * Uses jolike_srs_streak_* keys.
+ * @returns {{ streak: number, lastDate: string|null }}
+ */
+export function getStreak() {
+  try {
+    const raw = localStorage.getItem('jolike_streak')
+    if (!raw) return { streak: 0, lastDate: null }
+    const data = JSON.parse(raw)
+    return { streak: data.streak ?? 0, lastDate: data.lastDate ?? null }
+  } catch {
+    return { streak: 0, lastDate: null }
+  }
+}
+
+function recordStreakToday() {
+  try {
+    const today = new Date().toISOString().slice(0, 10)  // YYYY-MM-DD
+    const existing = localStorage.getItem('jolike_streak')
+    const prev = existing ? JSON.parse(existing) : { streak: 0, lastDate: null }
+    if (prev.lastDate === today) return  // already counted today
+    const yesterday = new Date(Date.now() - 86400_000).toISOString().slice(0, 10)
+    const streak = prev.lastDate === yesterday ? prev.streak + 1 : 1
+    localStorage.setItem('jolike_streak', JSON.stringify({ streak, lastDate: today }))
+  } catch {
+    // fail silently
+  }
+}
+
+/**
  * Record the outcome of a review and schedule the next one.
  * @param {string} keyword
  * @param {'known'|'unsure'} outcome
@@ -112,4 +142,5 @@ export function markReview(keyword, outcome) {
       reviews,
     })
   }
+  recordStreakToday()
 }

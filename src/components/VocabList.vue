@@ -3,7 +3,7 @@
   <div
     class="fixed inset-0 z-40 bg-black/60"
     @click="$emit('close')"
-  />
+  ></div>
 
   <!-- Drawer panel (slides in from right) -->
   <div class="fixed inset-y-0 right-0 z-50 w-4/5 max-w-xs bg-gray-900 flex flex-col shadow-2xl">

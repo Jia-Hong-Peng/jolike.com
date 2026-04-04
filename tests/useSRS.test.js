@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { scheduleReview, getDue, markReview } from '../src/composables/useSRS.js'
+import { scheduleReview, getDue, markReview, getStreak } from '../src/composables/useSRS.js'
 
 const MOCK_CARD = {
   keyword: 'run',
@@ -138,5 +138,54 @@ describe('markReview', () => {
     expect(updated.reviews).toBe(4)
     expect(updated.nextReview).toBeGreaterThanOrEqual(before + MS_PER_DAY - 1000)
     expect(updated.nextReview).toBeLessThanOrEqual(before + MS_PER_DAY + 1000)
+  })
+})
+
+describe('getStreak', () => {
+  // Helper: schedule a card and make it due right now
+  function setupDueCard(keyword = 'run') {
+    scheduleReview({ ...MOCK_CARD, keyword })
+    const entry = JSON.parse(localStorage.getItem(`jolike_srs_${keyword}`))
+    entry.nextReview = Date.now() - 1
+    localStorage.setItem(`jolike_srs_${keyword}`, JSON.stringify(entry))
+  }
+
+  it('T13 — returns streak=0 when no review has been done', () => {
+    const { streak } = getStreak()
+    expect(streak).toBe(0)
+  })
+
+  it('T14 — streak=1 after first review day', () => {
+    setupDueCard()
+    markReview('run', 'known')
+    const { streak } = getStreak()
+    expect(streak).toBe(1)
+  })
+
+  it('T15 — streak stays 1 if markReview called multiple times same day', () => {
+    setupDueCard('run')
+    setupDueCard('fly')
+    markReview('run', 'known')
+    markReview('fly', 'known')
+    const { streak } = getStreak()
+    expect(streak).toBe(1)
+  })
+
+  it('T16 — streak resets to 1 if last review was more than 1 day ago', () => {
+    setupDueCard()
+    const twoDaysAgo = new Date(Date.now() - 2 * MS_PER_DAY).toISOString().slice(0, 10)
+    localStorage.setItem('jolike_streak', JSON.stringify({ streak: 5, lastDate: twoDaysAgo }))
+    markReview('run', 'known')
+    const { streak } = getStreak()
+    expect(streak).toBe(1)  // chain broken
+  })
+
+  it('T17 — streak increments if last review was yesterday', () => {
+    setupDueCard()
+    const yesterday = new Date(Date.now() - MS_PER_DAY).toISOString().slice(0, 10)
+    localStorage.setItem('jolike_streak', JSON.stringify({ streak: 4, lastDate: yesterday }))
+    markReview('run', 'known')
+    const { streak } = getStreak()
+    expect(streak).toBe(5)
   })
 })

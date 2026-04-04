@@ -12,8 +12,7 @@
 
     <!-- Card info area (bottom) -->
     <div class="bg-gray-900 px-6 pt-5 pb-4 flex flex-col gap-2 rounded-t-3xl -mt-4 relative z-10">
-
-      <!-- Type badge + tier + frequency -->
+<!-- Type badge + tier + frequency -->
       <div class="flex items-center gap-2 flex-wrap">
         <span class="text-xs font-semibold px-3 py-1 rounded-full" :class="typeBadgeClass">
           {{ typeLabel }}

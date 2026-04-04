@@ -1,7 +1,7 @@
 <template>
   <div class="relative w-full h-full bg-black overflow-hidden">
     <!-- YouTube iframe container -->
-    <div ref="iframeContainer" class="absolute inset-0" />
+    <div ref="iframeContainer" class="absolute inset-0"></div>
 
     <!-- Replay button (T021 — US2) -->
     <button
