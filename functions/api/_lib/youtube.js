@@ -1,17 +1,40 @@
 /**
- * YouTube subtitle fetcher — InnerTube Android client approach.
+ * YouTube subtitle fetcher — InnerTube multi-client fallback strategy.
  *
- * Strategy:
- * 1. POST to /youtubei/v1/player with ANDROID client context
- * 2. Extract captionTracks from response
- * 3. Fetch the English caption XML
+ * YouTube occasionally blocks or returns empty captions for specific clients.
+ * We try multiple InnerTube clients in order until one returns caption tracks.
  *
- * No API key required. Mimics the YouTube Android app.
+ * Client priority:
+ *   1. ANDROID (19.09.37) — most permissive for captions, no bot check
+ *   2. TVHTML5_SIMPLY_EMBEDDED_PLAYER — reliable fallback, no PO token needed
+ *   3. IOS — second mobile fallback
+ *   4. WEB_EMBEDDED_PLAYER — last resort web client
  */
 
 const INNERTUBE_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false'
-const ANDROID_VERSION = '20.10.38'
-const ANDROID_UA = `com.google.android.youtube/${ANDROID_VERSION} (Linux; U; Android 14)`
+
+const CLIENTS = [
+  {
+    clientName: 'ANDROID',
+    clientVersion: '19.09.37',
+    userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 14)',
+  },
+  {
+    clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER',
+    clientVersion: '2.0',
+    userAgent: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1',
+  },
+  {
+    clientName: 'IOS',
+    clientVersion: '19.45.4',
+    userAgent: 'com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 17_7_1 like Mac OS X)',
+  },
+  {
+    clientName: 'WEB_EMBEDDED_PLAYER',
+    clientVersion: '2.20240726.00.00',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
+  },
+]
 
 /**
  * Extract video ID from a YouTube URL.
@@ -36,65 +59,76 @@ export function extractVideoId(url) {
 
 /**
  * Fetch English transcript for a YouTube video via InnerTube API.
- * Caps at 900 seconds (15 minutes) per spec edge case.
+ * Tries multiple clients in order until one succeeds.
  *
  * @param {string} videoId
  * @returns {Promise<{transcript: Array<{text,start,dur}>} | {error: string}>}
  */
 export async function fetchTranscript(videoId) {
-  // Step 1: call InnerTube player endpoint (Android client — returns captions without bot check)
-  let playerData
-  try {
-    const res = await fetch(INNERTUBE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': ANDROID_UA,
-      },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: 'ANDROID',
-            clientVersion: ANDROID_VERSION,
-          },
-        },
-        videoId,
-      }),
-    })
-    if (!res.ok) return { error: 'NO_CAPTIONS' }
-    playerData = await res.json()
-  } catch {
-    return { error: 'NETWORK_ERROR' }
+  // Try each client in priority order
+  for (const client of CLIENTS) {
+    const tracks = await tryGetCaptionTracks(videoId, client)
+    if (!tracks || tracks.length === 0) continue
+
+    const captionUrl = findEnglishCaptionUrl(tracks)
+    if (!captionUrl) continue
+
+    // Fetch and parse the caption XML
+    try {
+      const res = await fetch(captionUrl, {
+        headers: { 'User-Agent': client.userAgent },
+      })
+      if (!res.ok) continue
+
+      const xml = await res.text()
+      const transcript = parseCaptionXml(xml)
+      if (transcript.length > 0) return { transcript }
+    } catch {
+      // try next client
+    }
   }
 
-  // Step 2: find English caption track
-  const tracks = playerData?.captions?.playerCaptionsTracklistRenderer?.captionTracks
-  if (!Array.isArray(tracks) || tracks.length === 0) return { error: 'NO_CAPTIONS' }
-
-  const captionUrl = findEnglishCaptionUrl(tracks)
-  if (!captionUrl) return { error: 'NO_CAPTIONS' }
-
-  // Step 3: fetch caption XML
-  let captionXml
-  try {
-    const res = await fetch(captionUrl, {
-      headers: { 'User-Agent': ANDROID_UA },
-    })
-    if (!res.ok) return { error: 'NO_CAPTIONS' }
-    captionXml = await res.text()
-  } catch {
-    return { error: 'NETWORK_ERROR' }
-  }
-
-  const transcript = parseCaptionXml(captionXml)
-  if (transcript.length === 0) return { error: 'NO_CAPTIONS' }
-
-  return { transcript }
+  return { error: 'NO_CAPTIONS' }
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Call InnerTube /player for a given client, return captionTracks array or null.
+ * @param {string} videoId
+ * @param {{ clientName, clientVersion, userAgent }} client
+ * @returns {Promise<Array|null>}
+ */
+async function tryGetCaptionTracks(videoId, client) {
+  try {
+    const res = await fetch(INNERTUBE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': client.userAgent,
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: client.clientName,
+            clientVersion: client.clientVersion,
+            hl: 'en',
+          },
+        },
+        videoId,
+      }),
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks
+    return Array.isArray(tracks) && tracks.length > 0 ? tracks : null
+  } catch {
+    return null
+  }
+}
 
 function findEnglishCaptionUrl(tracks) {
   const priority = [
@@ -112,31 +146,13 @@ function findEnglishCaptionUrl(tracks) {
 function parseCaptionXml(xml) {
   const segments = []
 
-  // InnerTube returns srv3 format: <p t="START_MS" d="DUR_MS">...</p>
-  // with inner <s> word tags or plain text
+  // InnerTube srv3 format: <p t="START_MS" d="DUR_MS">...</p>
   const pRegex = /<p[^>]+\bt="(\d+)"[^>]*\bd="(\d+)"[^>]*>([\s\S]*?)<\/p>/g
-
   let match
   while ((match = pRegex.exec(xml)) !== null) {
-    const startMs = parseInt(match[1], 10)
-    const durMs   = parseInt(match[2], 10)
-    const start   = startMs / 1000
-    const dur     = durMs   / 1000
-
-    // 15-minute cap (spec edge case)
-    if (start >= 900) continue
-
-    // Strip inner tags, decode entities
-    const rawText = match[3]
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g,  '<')
-      .replace(/&gt;/g,  '>')
-      .replace(/&#39;/g, "'")
-      .replace(/&quot;/g, '"')
-      .replace(/\s+/g, ' ')
-      .trim()
-
+    const start = parseInt(match[1], 10) / 1000
+    const dur   = parseInt(match[2], 10) / 1000
+    const rawText = decodeEntities(match[3].replace(/<[^>]+>/g, ' '))
     if (rawText) segments.push({ text: rawText, start, dur })
   }
 
@@ -146,15 +162,21 @@ function parseCaptionXml(xml) {
     while ((match = textRegex.exec(xml)) !== null) {
       const start = parseFloat(match[1])
       const dur   = parseFloat(match[2] || '2')
-      if (start >= 900) continue
-      const rawText = match[3]
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-        .replace(/&#39;/g, "'").replace(/&quot;/g, '"')
-        .replace(/\s+/g, ' ').trim()
+      const rawText = decodeEntities(match[3].replace(/<[^>]+>/g, ' '))
       if (rawText) segments.push({ text: rawText, start, dur })
     }
   }
 
   return segments
+}
+
+function decodeEntities(str) {
+  return str
+    .replace(/&amp;/g,  '&')
+    .replace(/&lt;/g,   '<')
+    .replace(/&gt;/g,   '>')
+    .replace(/&#39;/g,  "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g,    ' ')
+    .trim()
 }
