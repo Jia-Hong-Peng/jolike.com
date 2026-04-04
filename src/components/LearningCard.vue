@@ -7,6 +7,8 @@
         :video-id="card.video_id"
         :start="card.clip_start"
         :end="card.clip_end"
+        :loop="loop"
+        :hide-controls="true"
       />
     </div>
 
@@ -91,6 +93,10 @@ const props = defineProps({
   card: {
     type: Object,
     required: true,
+  },
+  loop: {
+    type: Boolean,
+    default: false,
   },
 })
 

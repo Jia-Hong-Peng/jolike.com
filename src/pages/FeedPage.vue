@@ -82,14 +82,33 @@
           ref="cardRef"
           :key="currentCard.id"
           :card="currentCard"
+          :loop="loopEnabled"
         >
-          <!-- US2: ShadowingPanel -->
-          <ShadowingPanel
-            :card="currentCard"
-            @before-record="stopVideoForShadowing"
-          />
+          <!-- Replay + Loop controls -->
+          <div class="flex gap-2 mt-2">
+            <button
+              class="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3 font-semibold
+                     text-base transition-colors min-h-[48px] bg-gray-800 text-white hover:bg-gray-700"
+              title="重聽"
+              @click="replayCard"
+            >
+              ↺ 重聽
+            </button>
+            <button
+              class="flex items-center justify-center gap-1 rounded-2xl px-4 py-3 font-semibold
+                     text-base transition-colors min-h-[48px]"
+              :class="loopEnabled
+                ? 'bg-blue-700 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+              title="循環播放"
+              @click="loopEnabled = !loopEnabled"
+            >
+              🔁
+              <span class="text-sm">{{ loopEnabled ? '循環中' : '循環' }}</span>
+            </button>
+          </div>
 
-          <!-- US3: ActionBar -->
+          <!-- ActionBar -->
           <ActionBar
             :card-id="currentCard.id"
             :status="cardStatus(currentCard.id)"
@@ -147,7 +166,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import LearningCard from '@/components/LearningCard.vue'
-import ShadowingPanel from '@/components/ShadowingPanel.vue'
 import ActionBar from '@/components/ActionBar.vue'
 import VocabList from '@/components/VocabList.vue'
 import { getVideo } from '@/services/api.js'
@@ -163,6 +181,7 @@ const cards = ref([])
 const cardRef = ref(null)
 const showVocabList = ref(false)
 const transcript = ref([])
+const loopEnabled = ref(false)
 
 // Level: persisted in localStorage
 const LEVELS = [
@@ -262,9 +281,8 @@ function onMark({ id, status }) {
   })
 }
 
-// --- ShadowingPanel: stop video before recording ---
-function stopVideoForShadowing() {
-  cardRef.value?.stopVideo()
+function replayCard() {
+  cardRef.value?.playVideo()
 }
 
 function onJumpToCard(index) {

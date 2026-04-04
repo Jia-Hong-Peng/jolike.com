@@ -40,6 +40,8 @@ const props = defineProps({
   hideControls: { type: Boolean, default: false },
   // seamless: video keeps playing without pause/seek between segments (autoplay mode)
   seamless:     { type: Boolean, default: false },
+  // loop: auto-replay the clip when it ends
+  loop:         { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['ended'])
@@ -118,6 +120,11 @@ function startInterval() {
             lastEmittedEnd = props.end
             emit('ended')
           }
+        } else if (props.loop) {
+          // Loop mode: seek back to start and keep playing
+          player.seekTo(props.start, true)
+          player.playVideo()
+          lastEmittedEnd = -1
         } else {
           player.pauseVideo()
           clearInterval(intervalId)
