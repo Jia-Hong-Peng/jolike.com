@@ -20,6 +20,16 @@
         >
           {{ typeLabel }}
         </span>
+        <!-- Difficulty tier badge -->
+        <span
+          v-if="card.difficulty_tier"
+          class="text-xs px-2 py-1 rounded-full font-bold"
+          :class="tierBadgeClass"
+          :title="tierTitle"
+        >
+          {{ tierLabel }}
+        </span>
+
         <span
           v-if="card.frequency > 0"
           class="text-xs px-2 py-1 rounded-full font-medium"
@@ -139,6 +149,23 @@ const frequencyLabel = computed(() => {
   if (f >= 5) return `🔥 出現 ${f} 次`
   if (f >= 3) return `⚡ 出現 ${f} 次`
   return `出現 ${f} 次`
+})
+
+const TIER_LABELS = { 1: 'A1-A2', 2: 'B1', 3: 'B2', 4: 'C1+' }
+const TIER_TITLES = {
+  1: '基礎詞彙 (A1/A2)',
+  2: '中級詞彙 (B1)',
+  3: '學術詞彙 (B2)',
+  4: '進階詞彙 (C1+)',
+}
+const tierLabel = computed(() => TIER_LABELS[props.card.difficulty_tier] ?? '')
+const tierTitle = computed(() => TIER_TITLES[props.card.difficulty_tier] ?? '')
+const tierBadgeClass = computed(() => {
+  const t = props.card.difficulty_tier
+  if (t === 4) return 'bg-purple-900 text-purple-300 border border-purple-700'
+  if (t === 3) return 'bg-blue-900 text-blue-300 border border-blue-700'
+  if (t === 2) return 'bg-teal-900 text-teal-300 border border-teal-700'
+  return 'bg-gray-800 text-gray-500'
 })
 
 const frequencyBadgeClass = computed(() => {

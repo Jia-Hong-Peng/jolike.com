@@ -138,9 +138,9 @@ const transcript = ref([])
 
 // Level: persisted in localStorage
 const LEVELS = [
-  { key: 'beginner',     label: '初級', desc: '所有常見單字' },
-  { key: 'intermediate', label: '中級', desc: '過濾基礎單字' },
-  { key: 'advanced',     label: '進階', desc: '僅顯示進階詞彙' },
+  { key: 'beginner',     label: '初級', desc: '顯示 A1/A2 以上詞彙（包含基礎詞）' },
+  { key: 'intermediate', label: '中級', desc: '顯示 B1 以上詞彙（過濾基礎詞）' },
+  { key: 'advanced',     label: '進階', desc: '顯示 B2/C1+ 學術與專業詞彙' },
 ]
 const level = ref(localStorage.getItem('jolike_level') || 'intermediate')
 
