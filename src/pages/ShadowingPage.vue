@@ -80,8 +80,10 @@
         />
 
         <!-- Subtitle overlay at bottom of video -->
-        <div class="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-10
-                    bg-gradient-to-t from-black/85 to-transparent pointer-events-none z-20">
+        <div
+class="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-10
+                    bg-gradient-to-t from-black/85 to-transparent pointer-events-none z-20"
+>
           <!-- Chinese translation -->
           <p v-if="currentZh" class="text-yellow-300 text-sm text-center leading-snug mb-1 drop-shadow">
             {{ currentZh }}
@@ -286,7 +288,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 // ── Computed ──────────────────────────────────────────────────────────────────
 const currentSegment = computed(() => segments.value[currentIdx.value] ?? null)
-const prevSegment    = computed(() => currentIdx.value > 0 ? segments.value[currentIdx.value - 1] : null)
 
 const clipStart = computed(() => {
   const seg = currentSegment.value

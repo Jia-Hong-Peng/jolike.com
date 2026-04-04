@@ -11,7 +11,7 @@
     >
       <div class="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
         <svg class="w-7 h-7 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M8 5v14l11-7z"/>
+          <path d="M8 5v14l11-7z" />
         </svg>
       </div>
     </div>
