@@ -31,19 +31,33 @@
         {{ errorMessage }}
       </p>
 
-      <!-- Submit button -->
-      <button
-        class="mt-4 w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700
-               disabled:cursor-not-allowed text-white font-semibold rounded-2xl
-               py-4 text-base transition-colors flex items-center justify-center gap-2
-               min-h-[56px]"
-        :disabled="loading || !url.trim()"
-        @click="submit"
-      >
-        <span v-if="loading" class="animate-spin text-lg">⟳</span>
-        <span v-if="loading">分析中…</span>
-        <span v-else>開始學習</span>
-      </button>
+      <!-- Mode buttons -->
+      <div class="mt-4 flex gap-3">
+        <button
+          class="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700
+                 disabled:cursor-not-allowed text-white font-semibold rounded-2xl
+                 py-4 text-sm transition-colors flex items-center justify-center gap-1.5
+                 min-h-[56px]"
+          :disabled="loading || !url.trim()"
+          @click="submitWithMode('feed')"
+        >
+          <span v-if="loading && activeMode === 'feed'" class="animate-spin text-lg">⟳</span>
+          <span v-else>📝</span>
+          <span>詞彙學習</span>
+        </button>
+        <button
+          class="flex-1 bg-teal-700 hover:bg-teal-600 disabled:bg-gray-700
+                 disabled:cursor-not-allowed text-white font-semibold rounded-2xl
+                 py-4 text-sm transition-colors flex items-center justify-center gap-1.5
+                 min-h-[56px]"
+          :disabled="loading || !url.trim()"
+          @click="submitWithMode('shadow')"
+        >
+          <span v-if="loading && activeMode === 'shadow'" class="animate-spin text-lg">⟳</span>
+          <span v-else>🎤</span>
+          <span>跟讀模式</span>
+        </button>
+      </div>
 
       <!-- Retry hint for non-URL errors -->
       <button
@@ -97,6 +111,7 @@ import { analyzeVideo, getErrorMessage } from '@/services/api.js'
 const url = ref('')
 const loading = ref(false)
 const errorCode = ref(null)
+const activeMode = ref('')  // 'feed' | 'shadow'
 
 const errorMessage = computed(() => {
   return errorCode.value ? getErrorMessage(errorCode.value) : ''
@@ -112,7 +127,7 @@ function isYouTubeUrl(val) {
   return /youtube\.com\/watch|youtu\.be\//.test(val)
 }
 
-async function submit() {
+async function submitWithMode(mode) {
   if (loading.value) return
   const trimmedUrl = url.value.trim()
   if (!trimmedUrl) return
@@ -122,29 +137,33 @@ async function submit() {
     return
   }
 
+  const dest = mode === 'shadow' ? '/shadow/' : '/feed/'
+
   const cachedId = getCachedVideoId(trimmedUrl)
   if (cachedId) {
     saveRecentVideo(cachedId, null)
-    window.location.href = `/feed/?v=${cachedId}`
+    window.location.href = `${dest}?v=${cachedId}`
     return
   }
 
   loading.value = true
+  activeMode.value = mode
   errorCode.value = null
 
   try {
     const data = await analyzeVideo(trimmedUrl)
     saveRecentVideo(data.video.id, data.video.title)
-    window.location.href = `/feed/?v=${data.video.id}`
+    window.location.href = `${dest}?v=${data.video.id}`
   } catch (err) {
     errorCode.value = err.error || 'ANALYSIS_FAILED'
     loading.value = false
+    activeMode.value = ''
   }
 }
 
 function retry() {
   errorCode.value = null
-  submit()
+  submitWithMode('feed')
 }
 
 function getCachedVideoId(youtubeUrl) {

@@ -16,6 +16,7 @@ export default defineConfig({
         feed:     resolve(__dirname, 'feed/index.html'),
         review:   resolve(__dirname, 'review/index.html'),
         progress: resolve(__dirname, 'progress/index.html'),
+        shadow:   resolve(__dirname, 'shadow/index.html'),
       },
     },
   },

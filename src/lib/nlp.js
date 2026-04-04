@@ -279,3 +279,57 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
       ...item,
     }))
 }
+
+/**
+ * Extract learnable words from a single subtitle segment (shadowing mode).
+ * Returns SRS-ready card objects for any B1+ (tier ≥ 2) content words found.
+ *
+ * @param {{ text: string, start: number, dur: number }} segment
+ * @param {string} videoId
+ * @returns {Array<Object>}
+ */
+export function extractWordsFromSegment(segment, videoId) {
+  if (!segment?.text) return []
+
+  const doc = nlp(segment.text)
+  const tokens = [
+    ...doc.nouns().not('#Pronoun').out('array'),
+    ...doc.adjectives().out('array'),
+    ...doc.verbs().not('#Auxiliary').out('array'),
+  ]
+
+  const seen = new Set()
+  const cards = []
+
+  for (const token of tokens) {
+    if (token.trim().includes(' ')) continue
+    const w = token.replace(/[^a-zA-Z]/g, '').toLowerCase()
+    if (!w || w.length < 3 || seen.has(w)) continue
+    if (STOPS_ALWAYS.has(w)) continue
+    seen.add(w)
+
+    const tier = wordDifficultyTier(w)
+    if (tier < 2) continue  // skip A1/A2 basics
+
+    const clip_start = Math.max(0, segment.start - 0.5)
+    const clip_end   = segment.start + Math.max(segment.dur, CLIP_MIN_S) + 1.5
+
+    cards.push({
+      id:              `${videoId}_${w}`,
+      video_id:        videoId,
+      type:            'word',
+      keyword:         w,
+      meaning_zh:      lookupMeaning(w),
+      frequency:       1,
+      difficulty_tier: tier,
+      sentence:        segment.text,
+      clip_start:      +clip_start.toFixed(2),
+      clip_end:        +clip_end.toFixed(2),
+      sort_order:      0,
+      level:           'intermediate',
+    })
+  }
+
+  // Sort: hardest first (most worth learning)
+  return cards.sort((a, b) => b.difficulty_tier - a.difficulty_tier)
+}
