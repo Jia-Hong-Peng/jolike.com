@@ -3,10 +3,23 @@
     <!-- YouTube iframe container -->
     <div ref="iframeContainer" class="absolute inset-0"></div>
 
-    <!-- Replay button (T021 — US2) -->
+    <!-- Click-to-play overlay: shown when video is paused/unstarted/ended -->
+    <div
+      v-if="showPlayOverlay"
+      class="absolute inset-0 z-10 flex items-center justify-center cursor-pointer bg-black/20"
+      @click="play"
+    >
+      <div class="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
+        <svg class="w-7 h-7 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Replay button (bottom-right, always visible) -->
     <button
       class="absolute bottom-4 right-4 bg-black/60 text-white rounded-full
-             w-11 h-11 flex items-center justify-center text-lg z-10
+             w-11 h-11 flex items-center justify-center text-lg z-20
              hover:bg-black/80 transition-colors"
       title="重播"
       @click="play"
@@ -26,6 +39,7 @@ const props = defineProps({
 })
 
 const iframeContainer = ref(null)
+const showPlayOverlay = ref(true)  // shown until video actually starts playing
 let player = null
 let intervalId = null
 
@@ -73,6 +87,14 @@ async function initPlayer() {
       onReady: () => {
         play()
       },
+      onStateChange: (e) => {
+        // YT.PlayerState: PLAYING=1, PAUSED=2, ENDED=0, BUFFERING=3, CUED=5, UNSTARTED=-1
+        if (e.data === 1 || e.data === 3) {
+          showPlayOverlay.value = false  // playing or buffering → hide overlay
+        } else {
+          showPlayOverlay.value = true   // paused / ended / unstarted → show overlay
+        }
+      },
     },
   })
 }
@@ -80,6 +102,7 @@ async function initPlayer() {
 function play() {
   if (!player || typeof player.seekTo !== 'function') return
   clearInterval(intervalId)
+  showPlayOverlay.value = false
   player.seekTo(props.start, true)
   player.playVideo()
 
@@ -89,6 +112,7 @@ function play() {
       if (current >= props.end) {
         player.pauseVideo()
         clearInterval(intervalId)
+        showPlayOverlay.value = true
       }
     } catch {
       clearInterval(intervalId)
@@ -118,6 +142,7 @@ onBeforeUnmount(() => {
 
 // Re-init player when videoId changes (navigating between cards)
 watch(() => props.videoId, () => {
+  showPlayOverlay.value = true
   if (player && typeof player.loadVideoById === 'function') {
     player.loadVideoById({ videoId: props.videoId, startSeconds: props.start })
     play()
