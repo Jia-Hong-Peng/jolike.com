@@ -40,8 +40,11 @@ export async function onRequestPost(context) {
     })
   }
 
-  // Fetch from YouTube timedtext
-  const result = await fetchTranscript(videoId)
+  // Fetch transcript + oEmbed title in parallel
+  const [result, title] = await Promise.all([
+    fetchTranscript(videoId),
+    fetchOEmbedTitle(videoId),
+  ])
 
   if (result.error === 'NO_CAPTIONS') {
     return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
@@ -60,7 +63,7 @@ export async function onRequestPost(context) {
   try {
     await saveVideo(DB, {
       id: videoId,
-      title: '',           // timedtext endpoint does not return title
+      title,
       duration_seconds,
       transcript,
     })
@@ -70,10 +73,28 @@ export async function onRequestPost(context) {
   }
 
   return jsonOk({
-    video: { id: videoId, title: '', duration_seconds },
+    video: { id: videoId, title, duration_seconds },
     transcript,
     cached: false,
   })
+}
+
+/**
+ * Fetch video title via YouTube oEmbed (no API key required).
+ * Returns empty string on any failure — non-blocking.
+ * @param {string} videoId
+ * @returns {Promise<string>}
+ */
+async function fetchOEmbedTitle(videoId) {
+  try {
+    const url = `https://www.youtube.com/oembed?url=https://youtu.be/${videoId}&format=json`
+    const res = await fetch(url, { signal: AbortSignal.timeout(4000) })
+    if (!res.ok) return ''
+    const data = await res.json()
+    return data?.title || ''
+  } catch {
+    return ''
+  }
 }
 
 function jsonOk(data) {

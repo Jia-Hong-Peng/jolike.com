@@ -341,7 +341,7 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
       keyword: phrase,
       meaning_zh: lookupMeaning(phrase),
       frequency: freq,
-      difficulty_tier: 2,  // phrases are inherently B1+ by nature
+      difficulty_tier: Math.max(1, ...phrase.split(' ').map(w => wordDifficultyTier(w))),
       sentence: seg.text,
       ...getClip(seg),
     })
@@ -378,7 +378,7 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
   return [...words, ...phrases, ...patterns]
     .sort((a, b) => learningScore(b.keyword, b.frequency) - learningScore(a.keyword, a.frequency))
     .map((item, index) => ({
-      id: `${videoId}_${level}_${index}`,
+      id: `${videoId}_${item.keyword.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
       video_id: videoId,
       sort_order: index,
       level,
