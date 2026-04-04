@@ -29,7 +29,7 @@ const cefrMap = cefrVocab
 // Fallback: AWL (Academic Word List + business vocab) — maps to B2 tier
 const awlSet = new Set(awlWords.map(w => w.toLowerCase()))
 
-const MAX_WORDS   = 12  // increased from 10 (patterns removed, more room for words)
+const MAX_WORDS   = 8   // quality over quantity — fewer high-value cards beats many mediocre ones
 const MAX_PHRASES = 5
 const CLIP_MIN_S  = 3
 const MIN_WORDS_BEFORE_FALLBACK = 5  // if fewer words pass tier, drop tier by 1
@@ -92,15 +92,10 @@ function wordDifficultyTier(word) {
   return 4 // C1+ specialized / unknown
 }
 
-// Score multiplier by tier — tier4 (rare/specialized) gets highest boost
-function tierMultiplier(tier) {
-  return [0, 0.08, 0.7, 1.6, 2.5][tier] ?? 1.0
-}
-
 // Minimum tier required for this level
 function minTierForLevel(level) {
   if (level === 'advanced') return 3     // B2+ (AWL + specialized)
-  if (level === 'intermediate') return 2  // B1+
+  if (level === 'intermediate') return 3  // B2+ (academic/professional)
   return 1                               // Any tier
 }
 
@@ -112,16 +107,16 @@ function minLength(level) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function learningScore(word, freq) {
+function learningScore(word, freq, posMult = 1.0) {
   const tier = wordDifficultyTier(word)
-  const boost = tierMultiplier(tier) * (cedict[word] ? 1.2 : 1.0)
-  return freq * boost
+  const cedictBoost = cedict[word] ? 1.2 : 1.0
+  // Tier is the primary signal (scale 0–40). Frequency + POS + cedict are secondary.
+  return tier * 10 + Math.log1p(freq) * posMult * cedictBoost
 }
 
-function lookupMeaning(keyword) {
+export function lookupMeaning(keyword) {
   const key = keyword.toLowerCase()
-  const meaning = cedict[key] || cedict[key.replace(/-/g, ' ')] || ''
-  return meaning.slice(0, 10) || '—'
+  return cedict[key] || cedict[key.replace(/-/g, ' ')] || ''
 }
 
 function getClip(segment) {
@@ -138,7 +133,7 @@ function getClip(segment) {
  * @param {string} videoId
  * @param {'beginner'|'intermediate'|'advanced'} level
  */
-export function extractLearningItems(transcript, videoId, level = 'intermediate') {
+export function extractLearningItems(transcript, videoId, level = 'intermediate', knownWords = new Set()) {
   const minLen  = minLength(level)
   let   minTier = minTierForLevel(level)
 
@@ -146,9 +141,17 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
   const wordFreq    = new Map()
   const wordAllSegs = new Map()  // word → all segments where it appears
 
+  // Pre-compute POS sets across all segments (verbs/adjectives get 1.5× boost)
+  const verbSet = new Set()
+  const adjSet  = new Set()
+
   for (const segment of transcript) {
     if (!segment.text) continue
     const doc = nlp(segment.text)
+    doc.verbs().not('#Auxiliary').out('array')
+      .forEach(v => verbSet.add(v.replace(/[^a-zA-Z]/g, '').toLowerCase()))
+    doc.adjectives().out('array')
+      .forEach(a => adjSet.add(a.replace(/[^a-zA-Z]/g, '').toLowerCase()))
     const tokens = [
       ...doc.nouns().not('#Pronoun').not('#ProperNoun').out('array'),
       ...doc.adjectives().out('array'),
@@ -163,6 +166,10 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
       if (!wordAllSegs.has(w)) wordAllSegs.set(w, [])
       wordAllSegs.get(w).push(segment)
     }
+  }
+
+  function posMultiplier(word) {
+    return (verbSet.has(word) || adjSet.has(word)) ? 1.5 : 1.0
   }
 
   // Pick the best segment for a word: prefer complete sentences (≥5 words)
@@ -181,11 +188,13 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     return candidates.reduce((best, s) => s.text.length < best.text.length ? s : best)
   }
 
-  // Tier-filtered ranking
+  // Tier-filtered ranking — knownWords filter happens here so fallback accounts for it
   function rankWords(tierThreshold) {
     return [...wordFreq.entries()]
       .filter(([w]) => wordDifficultyTier(w) >= tierThreshold)
-      .sort((a, b) => learningScore(b[0], b[1]) - learningScore(a[0], a[1]))
+      .filter(([w]) => !knownWords.has(w))
+      .sort((a, b) => learningScore(b[0], b[1], posMultiplier(b[0]))
+                    - learningScore(a[0], a[1], posMultiplier(a[0])))
   }
 
   // Adaptive tier fallback: if too sparse, lower threshold by 1
@@ -272,7 +281,9 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
 
   // ── Step 3: Merge, sort, assign IDs ──────────────────────────────────────────
   return [...words, ...phrases]
-    .sort((a, b) => learningScore(b.keyword, b.frequency) - learningScore(a.keyword, a.frequency))
+    .sort((a, b) =>
+      learningScore(b.keyword, b.frequency, posMultiplier(b.keyword)) -
+      learningScore(a.keyword, a.frequency, posMultiplier(a.keyword)))
     .map((item, index) => ({
       id: `${videoId}_${item.keyword.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
       video_id: videoId,

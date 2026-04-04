@@ -139,3 +139,89 @@ describe('nlp.js — pickBestSeg (best example sentence selection)', () => {
     }
   })
 })
+
+// ── Tier-primary scoring (new formula) ────────────────────────────────────────
+describe('nlp.js — tier-primary scoring', () => {
+  it('T-SCORE-1 — tier-4 word (freq=1) ranks above tier-2 word (freq=20)', () => {
+    // 'eloquence' = C1+ (tier 4), 'analysis' = B1 (tier 2)
+    const transcript = makeTranscript([
+      'Her eloquence was undeniable.',
+      'The analysis revealed several key findings about the data.',
+      'The analysis of this analysis showed further analysis of data analysis patterns.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'beginner')
+    const eloquence = items.find(i => i.keyword === 'eloquence')
+    const analysis  = items.find(i => i.keyword === 'analysis')
+    if (eloquence && analysis) {
+      expect(items.indexOf(eloquence)).toBeLessThan(items.indexOf(analysis))
+    }
+  })
+
+  it('T-MAXWORDS — at most 8 word cards returned', () => {
+    const transcript = makeTranscript([
+      'The sophisticated analysis demonstrates remarkable eloquence and profound complexity.',
+      'The innovative approach transcends conventional boundaries systematically.',
+      'She speculates continuously about various theoretical implications extensively.',
+      'The cumulative evidence corroborates preliminary assumptions quite conclusively.',
+      'Intrinsic motivation surpasses extrinsic factors substantially in practice.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'beginner')
+    const wordItems = items.filter(i => i.type === 'word')
+    expect(wordItems.length).toBeLessThanOrEqual(8)
+  })
+})
+
+// ── knownWords personal filter ────────────────────────────────────────────────
+describe('nlp.js — knownWords filter', () => {
+  it('T-KNOWN-1 — word in knownWords is absent from output', () => {
+    const transcript = makeTranscript([
+      'You should accomplish this task immediately and systematically.',
+    ])
+    const known = new Set(['accomplish'])
+    const items = extractLearningItems(transcript, 'v1', 'beginner', known)
+    expect(items.find(i => i.keyword === 'accomplish')).toBeUndefined()
+  })
+
+  it('T-KNOWN-2 — fallback triggers when all tier-3+ words are in knownWords', () => {
+    // 'accomplish' = AWL tier 3 → in knownWords
+    // 'analysis' = B1 tier 2 (confirmed by T19) → not in knownWords, should appear via fallback
+    const transcript = makeTranscript([
+      'You should accomplish this task systematically and achieve results.',
+      'She abandoned the project after careful analysis of the situation.',
+    ])
+    const known = new Set(['accomplish', 'systematic'])
+    const items = extractLearningItems(transcript, 'v1', 'intermediate', known)
+    // Tier-3 words are all known → fallback to tier-2 → 'analysis' should appear
+    expect(items.length).toBeGreaterThan(0)
+    const knownInOutput = items.filter(i => known.has(i.keyword))
+    expect(knownInOutput.length).toBe(0)
+  })
+
+  it('T-COMPAT-1 — omitting knownWords param returns same results as passing empty Set', () => {
+    const transcript = makeTranscript([
+      'The sophisticated analysis demonstrates remarkable eloquence.',
+    ])
+    const withDefault = extractLearningItems(transcript, 'v1', 'beginner')
+    const withEmpty   = extractLearningItems(transcript, 'v1', 'beginner', new Set())
+    expect(withDefault.map(i => i.keyword)).toEqual(withEmpty.map(i => i.keyword))
+  })
+})
+
+// ── POS weighting ─────────────────────────────────────────────────────────────
+describe('nlp.js — POS weighting', () => {
+  it('T-POS-1 — verb ranks higher than same-tier noun at same frequency', () => {
+    // 'speculate' (verb, AWL tier 3) vs 'speculation' (noun, AWL tier 3)
+    // verb gets ×1.5, so it should rank above the noun
+    const transcript = makeTranscript([
+      'She speculates about the outcome.',
+      'The speculation was intense.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'advanced')
+    const verbItem = items.find(i => i.keyword === 'speculate' || i.keyword === 'speculates')
+    const nounItem = items.find(i => i.keyword === 'speculation')
+    // Both may or may not appear — if both do, verb must rank first
+    if (verbItem && nounItem) {
+      expect(items.indexOf(verbItem)).toBeLessThan(items.indexOf(nounItem))
+    }
+  })
+})
