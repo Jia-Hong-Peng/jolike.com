@@ -150,7 +150,7 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     if (!segment.text) continue
     const doc = nlp(segment.text)
     const tokens = [
-      ...doc.nouns().not('#Pronoun').out('array'),
+      ...doc.nouns().not('#Pronoun').not('#ProperNoun').out('array'),
       ...doc.adjectives().out('array'),
       ...doc.verbs().not('#Auxiliary').out('array'),
     ]
@@ -236,12 +236,14 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     )
     for (const m of phrasalMatches) addPhrase(m[0], segment)
 
-    // Compound nouns — no determiners
+    // Compound nouns — no determiners, no proper noun phrases (person/place names)
     const nounPhrases = nlp(segment.text).nouns().out('array')
     for (const np of nounPhrases) {
       const clean = np.replace(/[^a-zA-Z ]/g, '').trim()
       if (DETERMINERS.test(clean)) continue
       if (clean.split(' ').length < 2) continue
+      // Skip proper noun phrases: all words are title-case (e.g. "Hayes Campbell", "New York")
+      if (clean.split(' ').every(w => w.length > 0 && /^[A-Z]/.test(w))) continue
       addPhrase(clean, segment)
     }
   }
@@ -293,7 +295,7 @@ export function extractWordsFromSegment(segment, videoId) {
 
   const doc = nlp(segment.text)
   const tokens = [
-    ...doc.nouns().not('#Pronoun').out('array'),
+    ...doc.nouns().not('#Pronoun').not('#ProperNoun').out('array'),
     ...doc.adjectives().out('array'),
     ...doc.verbs().not('#Auxiliary').out('array'),
   ]
