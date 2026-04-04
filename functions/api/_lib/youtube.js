@@ -1,40 +1,18 @@
 /**
- * YouTube subtitle fetcher — InnerTube multi-client fallback strategy.
+ * YouTube subtitle fetcher — watch page HTML strategy.
  *
- * YouTube occasionally blocks or returns empty captions for specific clients.
- * We try multiple InnerTube clients in order until one returns caption tracks.
+ * Strategy:
+ *   1. Fetch youtube.com/watch?v={id} with browser User-Agent
+ *   2. Extract captionTracks from ytInitialPlayerResponse in the HTML
+ *   3. Find the English track and fetch its timedtext XML
  *
- * Client priority:
- *   1. ANDROID (19.09.37) — most permissive for captions, no bot check
- *   2. TVHTML5_SIMPLY_EMBEDDED_PLAYER — reliable fallback, no PO token needed
- *   3. IOS — second mobile fallback
- *   4. WEB_EMBEDDED_PLAYER — last resort web client
+ * Why not InnerTube API:
+ *   YouTube's /youtubei/v1/player now requires a Proof-of-Origin (PO) token
+ *   when called server-side, causing empty captionTracks for most videos.
+ *   The watch page delivers captions without that requirement.
  */
 
-const INNERTUBE_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false'
-
-const CLIENTS = [
-  {
-    clientName: 'ANDROID',
-    clientVersion: '19.09.37',
-    userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 14)',
-  },
-  {
-    clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER',
-    clientVersion: '2.0',
-    userAgent: 'Mozilla/5.0 (SMART-TV; Linux; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1',
-  },
-  {
-    clientName: 'IOS',
-    clientVersion: '19.45.4',
-    userAgent: 'com.google.ios.youtube/19.45.4 (iPhone16,2; U; CPU iOS 17_7_1 like Mac OS X)',
-  },
-  {
-    clientName: 'WEB_EMBEDDED_PLAYER',
-    clientVersion: '2.20240726.00.00',
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36',
-  },
-]
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
 
 /**
  * Extract video ID from a YouTube URL.
@@ -58,37 +36,53 @@ export function extractVideoId(url) {
 }
 
 /**
- * Fetch English transcript for a YouTube video via InnerTube API.
- * Tries multiple clients in order until one succeeds.
- *
+ * Fetch English transcript for a YouTube video.
  * @param {string} videoId
  * @returns {Promise<{transcript: Array<{text,start,dur}>} | {error: string}>}
  */
 export async function fetchTranscript(videoId) {
-  // Try each client in priority order
-  for (const client of CLIENTS) {
-    const tracks = await tryGetCaptionTracks(videoId, client)
-    if (!tracks || tracks.length === 0) continue
-
-    const captionUrl = findEnglishCaptionUrl(tracks)
-    if (!captionUrl) continue
-
-    // Fetch and parse the caption XML
-    try {
-      const res = await fetch(captionUrl, {
-        headers: { 'User-Agent': client.userAgent },
-      })
-      if (!res.ok) continue
-
-      const xml = await res.text()
-      const transcript = parseCaptionXml(xml)
-      if (transcript.length > 0) return { transcript }
-    } catch {
-      // try next client
-    }
+  // Step 1: fetch the watch page HTML
+  let html
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return { error: 'NO_CAPTIONS' }
+    html = await res.text()
+  } catch {
+    return { error: 'NETWORK_ERROR' }
   }
 
-  return { error: 'NO_CAPTIONS' }
+  // Step 2: extract captionTracks from ytInitialPlayerResponse
+  const tracks = extractCaptionTracks(html)
+  if (!tracks || tracks.length === 0) return { error: 'NO_CAPTIONS' }
+
+  // Step 3: pick the best English track
+  const captionUrl = findEnglishCaptionUrl(tracks)
+  if (!captionUrl) return { error: 'NO_CAPTIONS' }
+
+  // Step 4: fetch the caption XML/JSON
+  let captionBody
+  try {
+    const res = await fetch(captionUrl, {
+      headers: { 'User-Agent': BROWSER_UA },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return { error: 'NO_CAPTIONS' }
+    captionBody = await res.text()
+  } catch {
+    return { error: 'NETWORK_ERROR' }
+  }
+
+  const transcript = parseCaptions(captionBody)
+  if (transcript.length === 0) return { error: 'NO_CAPTIONS' }
+
+  return { transcript }
 }
 
 // ---------------------------------------------------------------------------
@@ -96,35 +90,15 @@ export async function fetchTranscript(videoId) {
 // ---------------------------------------------------------------------------
 
 /**
- * Call InnerTube /player for a given client, return captionTracks array or null.
- * @param {string} videoId
- * @param {{ clientName, clientVersion, userAgent }} client
- * @returns {Promise<Array|null>}
+ * Extract captionTracks array from the YouTube watch page HTML.
+ * They live inside ytInitialPlayerResponse as JSON.
  */
-async function tryGetCaptionTracks(videoId, client) {
+function extractCaptionTracks(html) {
+  // Match the captionTracks JSON array directly — fastest extraction
+  const match = html.match(/"captionTracks":(\[.*?\])/)
+  if (!match) return null
   try {
-    const res = await fetch(INNERTUBE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': client.userAgent,
-      },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: client.clientName,
-            clientVersion: client.clientVersion,
-            hl: 'en',
-          },
-        },
-        videoId,
-      }),
-      signal: AbortSignal.timeout(6000),
-    })
-    if (!res.ok) return null
-    const data = await res.json()
-    const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks
-    return Array.isArray(tracks) && tracks.length > 0 ? tracks : null
+    return JSON.parse(match[1])
   } catch {
     return null
   }
@@ -132,8 +106,9 @@ async function tryGetCaptionTracks(videoId, client) {
 
 function findEnglishCaptionUrl(tracks) {
   const priority = [
-    t => t.languageCode === 'en' && t.kind !== 'asr',  // manual English
-    t => t.languageCode === 'en',                        // auto-generated English
+    t => t.languageCode === 'en' && t.kind !== 'asr',      // manual English
+    t => t.languageCode === 'en',                             // auto-generated English
+    t => t.languageCode === 'en-US',                          // en-US variant
     t => typeof t.languageCode === 'string' && t.languageCode.startsWith('en'),
   ]
   for (const pred of priority) {
@@ -143,28 +118,60 @@ function findEnglishCaptionUrl(tracks) {
   return null
 }
 
-function parseCaptionXml(xml) {
-  const segments = []
+/**
+ * Parse caption response — handles both timedtext XML and srv3 JSON formats.
+ */
+function parseCaptions(body) {
+  const trimmed = body.trimStart()
 
-  // InnerTube srv3 format: <p t="START_MS" d="DUR_MS">...</p>
-  const pRegex = /<p[^>]+\bt="(\d+)"[^>]*\bd="(\d+)"[^>]*>([\s\S]*?)<\/p>/g
+  // JSON3 format (YouTube timedtext fmt=json3)
+  if (trimmed.startsWith('{')) {
+    return parseJson3(body)
+  }
+
+  // XML formats
+  return parseXml(body)
+}
+
+function parseJson3(body) {
+  try {
+    const data = JSON.parse(body)
+    const events = data?.events ?? []
+    const segments = []
+    for (const ev of events) {
+      if (!ev.segs) continue
+      const start = (ev.tStartMs ?? 0) / 1000
+      const dur   = (ev.dDurationMs ?? 2000) / 1000
+      const text = ev.segs.map(s => s.utf8 ?? '').join('').replace(/\n/g, ' ').trim()
+      if (text && text !== '\n') segments.push({ text, start, dur })
+    }
+    return segments
+  } catch {
+    return []
+  }
+}
+
+function parseXml(xml) {
+  const segments = []
   let match
+
+  // srv3 format: <p t="START_MS" d="DUR_MS">...</p>
+  const pRegex = /<p[^>]+\bt="(\d+)"[^>]*\bd="(\d+)"[^>]*>([\s\S]*?)<\/p>/g
   while ((match = pRegex.exec(xml)) !== null) {
     const start = parseInt(match[1], 10) / 1000
     const dur   = parseInt(match[2], 10) / 1000
-    const rawText = decodeEntities(match[3].replace(/<[^>]+>/g, ' '))
-    if (rawText) segments.push({ text: rawText, start, dur })
+    const text  = decodeEntities(match[3].replace(/<[^>]+>/g, ' '))
+    if (text) segments.push({ text, start, dur })
   }
+  if (segments.length > 0) return segments
 
-  // Fallback: timedtext XML format <text start="..." dur="...">...</text>
-  if (segments.length === 0) {
-    const textRegex = /<text[^>]+start="([0-9.]+)"[^>]*(?:dur="([0-9.]+)")?[^>]*>([\s\S]*?)<\/text>/g
-    while ((match = textRegex.exec(xml)) !== null) {
-      const start = parseFloat(match[1])
-      const dur   = parseFloat(match[2] || '2')
-      const rawText = decodeEntities(match[3].replace(/<[^>]+>/g, ' '))
-      if (rawText) segments.push({ text: rawText, start, dur })
-    }
+  // timedtext format: <text start="..." dur="...">...</text>
+  const textRegex = /<text[^>]+start="([0-9.]+)"[^>]*(?:dur="([0-9.]+)")?[^>]*>([\s\S]*?)<\/text>/g
+  while ((match = textRegex.exec(xml)) !== null) {
+    const start = parseFloat(match[1])
+    const dur   = parseFloat(match[2] || '2')
+    const text  = decodeEntities(match[3].replace(/<[^>]+>/g, ' '))
+    if (text) segments.push({ text, start, dur })
   }
 
   return segments
