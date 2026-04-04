@@ -23,6 +23,21 @@
       </button>
     </div>
 
+    <!-- All mastered state -->
+    <div v-else-if="allMastered" class="flex flex-col items-center justify-center min-h-screen gap-6 px-8 text-center">
+      <div class="space-y-2">
+        <p class="text-4xl">🎓</p>
+        <p class="text-white text-xl font-bold">你已掌握此影片的所有詞彙！</p>
+        <p class="text-gray-400 text-sm">試試下一支影片，繼續挑戰新單字。</p>
+      </div>
+      <button
+        class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg min-h-[56px] w-full max-w-xs"
+        @click="goHome"
+      >
+        換影片
+      </button>
+    </div>
+
     <!-- Completed state -->
     <div v-else-if="isComplete" class="flex flex-col items-center justify-center min-h-screen gap-6 px-8">
       <div class="text-center space-y-2">
@@ -138,11 +153,12 @@ import VocabList from '@/components/VocabList.vue'
 import { getVideo } from '@/services/api.js'
 import { extractLearningItems } from '@/lib/nlp.js'
 import { useLearningSession } from '@/composables/useLearningSession.js'
-import { scheduleReview, getDue } from '@/composables/useSRS.js'
+import { scheduleReview, getDue, getKnownWords } from '@/composables/useSRS.js'
 
 // --- State ---
 const loading = ref(true)
 const error = ref(null)
+const allMastered = ref(false)
 const cards = ref([])
 const cardRef = ref(null)
 const showVocabList = ref(false)
@@ -193,9 +209,13 @@ onMounted(async () => {
   try {
     const data = await getVideo(videoId)
     transcript.value = data.transcript
-    const items = extractLearningItems(data.transcript, videoId, level.value)
+    const items = extractLearningItems(data.transcript, videoId, level.value, getKnownWords())
     if (items.length === 0) {
-      error.value = '無法從字幕中提取學習內容，請換一支影片'
+      if (getKnownWords().size > 0) {
+        allMastered.value = true
+      } else {
+        error.value = '無法從字幕中提取學習內容，請換一支影片'
+      }
     } else {
       cards.value = items
     }
@@ -278,8 +298,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 watch(level, (newLevel) => {
   localStorage.setItem('jolike_level', newLevel)
   if (transcript.value.length === 0) return
-  const items = extractLearningItems(transcript.value, videoId, newLevel)
-  cards.value = items.length > 0 ? items : cards.value
+  const items = extractLearningItems(transcript.value, videoId, newLevel, getKnownWords())
+  if (items.length > 0) {
+    cards.value = items
+    allMastered.value = false
+  } else if (getKnownWords().size > 0) {
+    allMastered.value = true
+  }
   jumpTo(0)
 })
 
