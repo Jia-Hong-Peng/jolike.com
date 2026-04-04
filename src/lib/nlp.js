@@ -18,10 +18,15 @@
  */
 
 import nlp from 'compromise'
-import awlWords from '@/data/coca5000.json'   // AWL + business vocab = B2 tier
+import awlWords from '@/data/coca5000.json'   // AWL + business vocab = B2 tier fallback
 import cedict from '@/data/cedict.json'
+import cefrVocab from '@/data/cefr_vocab.json'  // CEFR A1-C2 (8818 words, Open Language Profiles)
 
-// B2 tier: Academic Word List + business vocabulary (713 words)
+// Primary: CEFR-J + Octanove vocabulary profile (Open Language Profiles project)
+// { word: tier } where 1=A1/A2, 2=B1, 3=B2, 4=C1/C2
+const cefrMap = cefrVocab
+
+// Fallback: AWL (Academic Word List + business vocab) — maps to B2 tier
 const awlSet = new Set(awlWords.map(w => w.toLowerCase()))
 
 const MAX_WORDS   = 12  // increased from 10 (patterns removed, more room for words)
@@ -38,127 +43,16 @@ const STOPS_ALWAYS = new Set([
   'here','there','then','when','where','how','why','what','which',
 ])
 
-// ── Tier 1: A1/A2 — heavily penalized, filtered at intermediate/advanced ─────
-const TIER1_A1A2 = new Set([
-  // core verbs (A1)
-  'act','add','allow','appear','ask','become','begin','bring','build','buy',
-  'call','carry','catch','change','check','choose','close','come','continue',
-  'cost','create','cut','decide','do','drive','eat','enjoy','enter','fall',
-  'feel','fight','fill','find','finish','follow','get','give','go','grow',
-  'happen','have','hear','help','hold','hope','include','join','keep','know',
-  'learn','leave','let','like','listen','live','look','love','make','meet',
-  'move','need','offer','open','pass','pay','pick','plan','play','pull','push',
-  'put','read','receive','remember','run','save','say','send','show','sit',
-  'sleep','speak','spend','stand','start','stay','stop','talk','tell','think',
-  'travel','try','turn','understand','use','visit','wait','walk','want','watch',
-  'work','write',
-  // people / social
-  'adult','baby','boy','brother','child','children','daughter','family','father',
-  'friend','girl','group','husband','man','mother','parent','people','person',
-  'sister','son','teacher','team','wife','woman',
-  // everyday places / objects
-  'air','animal','area','art','bank','battery','body','book','box','building',
-  'bus','camera','car','card','cash','center','city','class','color','computer',
-  'country','cup','data','day','door','drink','earth','email','energy','eye',
-  'face','fact','fire','floor','flower','food','foot','game','ground','hand',
-  'head','heart','heat','home','house','idea','image','internet','job','key',
-  'land','language','law','leg','letter','level','light','line','list','map',
-  'message','mind','money','month','morning','mountain','music','name','news',
-  'night','number','ocean','office','order','page','paper','part','phone',
-  'photo','picture','place','plant','power','price','problem','question','result',
-  'road','room','rule','school','screen','sea','service','shop','sky','sound',
-  'space','star','store','story','street','system','table','thing','time','tool',
-  'town','tree','type','video','voice','wall','water','way','week','wind',
-  'window','word','world','year',
-  // basic adjectives
-  'able','afraid','angry','bad','beautiful','big','black','blue','bright','busy',
-  'cheap','clean','clear','close','cold','common','complete','cool','correct',
-  'dark','dead','deep','different','direct','early','easy','empty','equal',
-  'extra','fair','false','famous','far','fast','fine','free','full','global',
-  'good','great','green','happy','hard','heavy','high','hot','human','large',
-  'last','late','light','little','local','long','loud','low','main','modern',
-  'national','natural','near','new','next','nice','normal','old','open','own',
-  'personal','poor','possible','public','quiet','ready','real','red','rich',
-  'right','round','safe','same','short','sick','simple','slow','small','social',
-  'soft','special','strong','sure','tall','thin','tired','true','warm','weak',
-  'white','wide','wrong','young',
-  // tech at A2 in modern life
-  'cable','charge','charging','chip','circuit','cool','cooling','electric',
-  'electronic','engine','fuel','heating','launch','machine','motor','network',
-  'nuclear','orbit','rocket','satellite','signal','solar','speed','station',
-  'temperature','wireless',
-  // commonly known proper nouns / countries
-  'africa','america','asia','australia','china','europe','india','japan',
-  'russia','english','global',
-  // common inflected forms frequently encountered
-  'built','building','builds','calls','called','changed','changed','changes',
-  'coming','costs','created','creating','cutting','decided','dropped','eating',
-  'entering','falling','felt','found','getting','given','giving','gone','grew',
-  'growing','heard','holding','joined','kept','knew','known','leading','learned',
-  'leaving','lived','looked','making','meant','moved','moving','opened','paid',
-  'planned','playing','pulled','pulled','pushed','reading','received','running',
-  'saying','seen','sent','showing','sitting','sleeping','speaking','spending',
-  'started','staying','stopped','taken','talking','taught','thinking','told',
-  'trying','turned','understood','used','visited','waited','walking','wanted',
-  'watched','working','written','wrote',
-])
 
-// ── Tier 2: B1 — neutral scoring, filtered at advanced ───────────────────────
-const TIER2_B1 = new Set([
-  // B1 verbs
-  'achieve','adapt','affect','analyze','announce','apply','assess','assign',
-  'assist','attract','calculate','campaign','capture','combine','communicate',
-  'compare','compete','conduct','confirm','connect','construct','consume',
-  'contribute','convince','coordinate','decrease','define','deliver','demonstrate',
-  'design','detect','determine','distribute','eliminate','enable','encourage',
-  'engage','establish','evaluate','expand','experience','explore','finance',
-  'focus','fund','generate','identify','illustrate','implement','improve',
-  'indicate','influence','install','introduce','investigate','limit','locate',
-  'maintain','measure','modify','monitor','obtain','operate','organize','perform',
-  'predict','prepare','prevent','process','promote','propose','protect','prove',
-  'reduce','reflect','relate','release','remove','replace','represent','require',
-  'resolve','respond','restrict','review','select','solve','suggest','summarize',
-  'transfer','transform',
-  // B1 nouns
-  'ability','access','achievement','advantage','agreement','analysis','approach',
-  'aspect','authority','basis','behavior','benefit','capacity','challenge',
-  'choice','circumstance','claim','commitment','community','competition',
-  'concept','concern','condition','context','contribution','control','culture',
-  'decision','demand','description','development','discovery','distance',
-  'document','economy','education','element','environment','equipment','estimate',
-  'evaluation','evidence','experiment','explanation','failure','feature','field',
-  'foundation','function','growth','health','impact','improvement','industry',
-  'information','institution','interest','investment','issue','leadership',
-  'management','material','method','model','movement','opportunity','organization',
-  'output','period','policy','position','potential','practice','pressure',
-  'principle','production','progress','purpose','quality','range','rate',
-  'reaction','reason','relationship','research','resource','response',
-  'responsibility','risk','role','scale','section','shortage','situation',
-  'solution','source','stage','standard','statement','structure','supply',
-  'technology','term','theory','topic','trade','transport','treatment','trend',
-  'understanding','value','variety',
-  // B1 adjectives
-  'accurate','active','additional','advanced','appropriate','available','average',
-  'careful','central','chemical','commercial','complex','comprehensive',
-  'considerable','consistent','continuous','creative','critical','cultural',
-  'current','detailed','effective','efficient','essential','existing',
-  'experimental','external','financial','formal','independent','industrial',
-  'internal','major','mental','minor','necessary','negative','numerous','obvious',
-  'official','original','overall','physical','political','positive','previous',
-  'primary','professional','reasonable','regular','relevant','scientific',
-  'secondary','serious','significant','specific','standard','successful',
-  'suitable','technical','traditional','urban','useful','valid','various','visual',
-])
-
-// ── Difficulty tier lookup (with morphological stem fallback) ─────────────────
+// ── Difficulty tier lookup (CEFR-based with morphological stem fallback) ──────
+// Returns 1=A1/A2, 2=B1, 3=B2, 4=C1/C2
 function wordDifficultyTier(word) {
   const w = word.toLowerCase()
-  if (TIER1_A1A2.has(w)) return 1
-  if (TIER2_B1.has(w)) return 2
-  if (awlSet.has(w)) return 3
 
-  // Morphological stem fallback — handles: cooling→cool, cheaper→cheap,
-  //   builds→build, started→start, moving→move, quickly→quick
+  // Direct lookup in CEFR vocabulary
+  if (cefrMap[w] !== undefined) return cefrMap[w]
+
+  // Morphological stem fallback — handles inflected forms not in the CEFR list
   const stems = new Set()
   if (w.endsWith('ing') && w.length > 5) {
     stems.add(w.slice(0, -3))          // cooling  → cool
@@ -166,27 +60,36 @@ function wordDifficultyTier(word) {
     stems.add(w.slice(0, -4))          // running  → run (double consonant)
   }
   if (w.endsWith('er') && w.length > 4) stems.add(w.slice(0, -2))   // cheaper → cheap
-  if (w.endsWith('est') && w.length > 5) stems.add(w.slice(0, -3))  // cheapest→ cheap
+  if (w.endsWith('est') && w.length > 5) stems.add(w.slice(0, -3))  // cheapest → cheap
   if (w.endsWith('ed') && w.length > 4) {
     stems.add(w.slice(0, -2))          // started → start
     stems.add(w.slice(0, -1))          // moved   → move
     stems.add(w.slice(0, -3))          // stopped → stop (double)
   }
   if (w.endsWith('ly') && w.length > 4) stems.add(w.slice(0, -2))   // quickly → quick
-  if (w.endsWith('tion') && w.length > 6) stems.add(w.slice(0, -3)) // nation  → nat (rough, ok)
-  if (w.endsWith('ness') && w.length > 6) stems.add(w.slice(0, -4)) // darkness→ dark
-  if (w.endsWith('ment') && w.length > 6) stems.add(w.slice(0, -4)) // movement→ move
+  if (w.endsWith('tion') && w.length > 6) stems.add(w.slice(0, -3)) // reduction → reduc
+  if (w.endsWith('ness') && w.length > 6) stems.add(w.slice(0, -4)) // darkness → dark
+  if (w.endsWith('ment') && w.length > 6) stems.add(w.slice(0, -4)) // movement → move
+  if (w.endsWith('ity') && w.length > 6) stems.add(w.slice(0, -3))  // ability → abil
+  if (w.endsWith('ical') && w.length > 6) stems.add(w.slice(0, -4)) // historical → histor
   if (w.endsWith('s') && w.length > 4 && !w.endsWith('ss')) {
     stems.add(w.slice(0, -1))          // cars → car
     stems.add(w.slice(0, -2))          // houses → hous (rough)
   }
 
+  let bestTier = null
   for (const stem of stems) {
-    if (TIER1_A1A2.has(stem)) return 1
-    if (TIER2_B1.has(stem)) return 2
+    const t = cefrMap[stem]
+    if (t !== undefined && (bestTier === null || t < bestTier)) bestTier = t
+  }
+  if (bestTier !== null) return bestTier
+
+  // Final fallback: AWL = B2 tier, unknown = C1+ (tier 4)
+  if (awlSet.has(w)) return 3
+  for (const stem of stems) {
     if (awlSet.has(stem)) return 3
   }
-  return 4 // C1+ specialized
+  return 4 // C1+ specialized / unknown
 }
 
 // Score multiplier by tier — tier4 (rare/specialized) gets highest boost
