@@ -1,0 +1,29 @@
+name: Daily SRS Push Notification
+
+on:
+  schedule:
+    # 每天台灣時間 20:00（UTC 12:00）觸發
+    - cron: '0 12 * * *'
+  workflow_dispatch: # 允許手動觸發（測試用）
+
+jobs:
+  send-push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send SRS review reminders
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X GET "https://jolike.com/api/push-send" \
+            -H "Authorization: Bearer ${{ secrets.PUSH_SEND_SECRET }}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+
+          echo "Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::push-send failed with status $HTTP_CODE"
+            exit 1
+          fi
