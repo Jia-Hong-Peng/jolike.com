@@ -19,7 +19,7 @@
                  placeholder-gray-500 transition-colors"
           :class="{ 'border-red-500': errorCode === 'INVALID_URL' }"
           @input="onInput"
-          @keydown.enter="submit"
+          @keydown.enter="submitWithMode('feed')"
         />
       </div>
 
@@ -76,8 +76,8 @@
         <li
           v-for="v in recentVideos"
           :key="v.id"
-          class="bg-gray-900 rounded-2xl px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-800 transition-colors"
-          @click="() => (window.location.href = `/feed/?v=${v.id}`)"
+          class="bg-gray-900 rounded-2xl px-4 py-3 flex items-center gap-3 cursor-pointer hover:bg-gray-800 transition-colors active:bg-gray-700"
+          @click="openRecentVideo(v)"
         >
           <img
             :src="`https://img.youtube.com/vi/${v.id}/default.jpg`"
@@ -93,6 +93,46 @@
         </li>
       </ul>
     </div>
+
+    <!-- Mode picker for recent videos -->
+    <teleport to="body">
+      <div
+        v-if="modePickerVideo"
+        class="fixed inset-0 z-50 flex items-end justify-center"
+        @click.self="modePickerVideo = null"
+      >
+        <div class="absolute inset-0 bg-black/60" @click="modePickerVideo = null"></div>
+        <div class="relative w-full max-w-sm bg-gray-900 rounded-t-3xl px-5 pt-5 pb-8 space-y-4">
+          <div class="flex gap-3 items-center">
+            <img
+              :src="`https://img.youtube.com/vi/${modePickerVideo.id}/default.jpg`"
+              :alt="modePickerVideo.title"
+              class="w-16 h-11 object-cover rounded-lg bg-gray-800 flex-shrink-0"
+            />
+            <p class="text-white text-sm font-semibold leading-snug line-clamp-2">{{ modePickerVideo.title || modePickerVideo.id }}</p>
+          </div>
+          <p class="text-gray-400 text-xs text-center">選擇學習模式</p>
+          <div class="flex gap-3">
+            <button
+              class="flex-1 bg-blue-600 text-white py-3.5 rounded-2xl font-semibold text-sm min-h-[52px]
+                     hover:bg-blue-500 transition-colors flex flex-col items-center gap-0.5"
+              @click="goRecentWithMode('feed')"
+            >
+              <span class="text-xl">📝</span>
+              <span>詞彙學習</span>
+            </button>
+            <button
+              class="flex-1 bg-teal-700 text-white py-3.5 rounded-2xl font-semibold text-sm min-h-[52px]
+                     hover:bg-teal-600 transition-colors flex flex-col items-center gap-0.5"
+              @click="goRecentWithMode('shadow')"
+            >
+              <span class="text-xl">🎤</span>
+              <span>跟讀模式</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </teleport>
 
     <!-- Bottom links -->
     <div class="mt-8 flex flex-col items-center gap-3">
@@ -186,6 +226,19 @@ function getCachedVideoId(youtubeUrl) {
   } catch {
     return null
   }
+}
+
+// ── Recent video mode picker ──────────────────────────────────────────────────
+const modePickerVideo = ref(null)
+
+function openRecentVideo(v) {
+  modePickerVideo.value = v
+}
+
+function goRecentWithMode(mode) {
+  if (!modePickerVideo.value) return
+  const dest = mode === 'shadow' ? '/shadow/' : '/feed/'
+  window.location.href = `${dest}?v=${modePickerVideo.value.id}`
 }
 
 // ── Recent videos ─────────────────────────────────────────────────────────────
