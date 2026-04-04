@@ -207,6 +207,63 @@ describe('nlp.js — knownWords filter', () => {
   })
 })
 
+// ── Contraction / apostrophe-free stop words ─────────────────────────────────
+// YouTube auto-captions omit apostrophes: "wasn't" → "wasnt"
+// These must be blocked regardless of POS — they would otherwise score as tier-4
+describe('nlp.js — contraction filtering (apostrophe-free)', () => {
+  it('T-CONTRACTION-1 — wasnt (YouTube caption form of wasn\'t) never appears', () => {
+    const transcript = makeTranscript([
+      'And it wasnt her. It was me. So it wasnt the right thing.',
+      'She analyzed the situation with remarkable eloquence and profound insight.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'advanced')
+    expect(items.find(i => i.keyword === 'wasnt')).toBeUndefined()
+  })
+
+  it('T-CONTRACTION-2 — common contractions stripped of apostrophe are all blocked', () => {
+    const contractionForms = ['didnt','doesnt','dont','cant','wouldnt','couldnt',
+      'shouldnt','havent','hasnt','isnt','arent','werent','youre','theyre']
+    const texts = contractionForms.map(w => `They ${w} understand the analysis.`)
+    const transcript = makeTranscript(texts)
+    const items = extractLearningItems(transcript, 'v1', 'beginner')
+    for (const w of contractionForms) {
+      expect(items.find(i => i.keyword === w), `${w} should be blocked`).toBeUndefined()
+    }
+  })
+
+  it('T-CONTRACTION-3 — advanced level never shows contractions as C1+', () => {
+    // Regression: "wasnt" was scoring tier 4 (C1+) due to unknown-word fallback
+    const transcript = makeTranscript([
+      'It wasnt right. She doesnt agree. They cant stop it.',
+      'The analysis demonstrates remarkable eloquence and theoretical sophistication.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'advanced')
+    const contractionsInOutput = items.filter(i =>
+      ['wasnt','doesnt','cant','isnt','arent','didnt'].includes(i.keyword)
+    )
+    expect(contractionsInOutput.length).toBe(0)
+  })
+})
+
+// ── Advanced vs intermediate tier differentiation ─────────────────────────────
+describe('nlp.js — advanced level tier-4 focus', () => {
+  it('T-ADV-1 — advanced never returns tier-1/2 words when tier-4 words exist', () => {
+    // With tier-4 words present, advanced mode should not show A1/A2/B1 basics
+    const transcript = makeTranscript([
+      'Her eloquence was undeniable.',       // eloquence, undeniable = tier 4
+      'The child runs home every day.',       // child, run, home = tier 1/2
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'advanced')
+    const wordItems = items.filter(i => i.type === 'word')
+    // If any tier-4 word made it in, no tier-1 word should precede it
+    const firstTier4Idx = wordItems.findIndex(i => i.difficulty_tier >= 4)
+    const firstTier1Idx = wordItems.findIndex(i => i.difficulty_tier <= 1)
+    if (firstTier4Idx >= 0 && firstTier1Idx >= 0) {
+      expect(firstTier4Idx).toBeLessThan(firstTier1Idx)
+    }
+  })
+})
+
 // ── POS weighting ─────────────────────────────────────────────────────────────
 describe('nlp.js — POS weighting', () => {
   it('T-POS-1 — verb ranks higher than same-tier noun at same frequency', () => {

@@ -13,8 +13,8 @@
  *
  * Levels:
  *   beginner     — tier 1+ (all content words, min 3 chars)
- *   intermediate — tier 2+ (filter out A1/A2 basics)
- *   advanced     — tier 3+ (academic & specialized only; fallback to tier 2 if sparse)
+ *   intermediate — tier 3+ (B2 academic/professional; fallback to tier 2 if sparse)
+ *   advanced     — tier 4+ (C1+ rare/specialized only; fallback to tier 3 → 2 if sparse)
  */
 
 import nlp from 'compromise'
@@ -41,6 +41,14 @@ const STOPS_ALWAYS = new Set([
   'yeah','okay','well','like','just','also','even','still','really','already',
   'actually','very','quite','rather','much','many','most','some','more','less',
   'here','there','then','when','where','how','why','what','which',
+  // Apostrophe-free contractions (YouTube auto-captions omit apostrophes,
+  // so "wasn't" → "wasnt". POS tagging fails on these, causing them to score
+  // as tier-4 "unknown specialized" words — a false positive we must block.)
+  'wasnt','wasnt','werent','isnt','arent','doesnt','didnt','dont','wont','cant',
+  'couldnt','wouldnt','shouldnt','mustnt','neednt','oughtnt',
+  'havent','hasnt','hadnt',
+  'youre','theyre','hes','shes','thats','whats','whos','weve','theyve',
+  'ive','hed','shed','theyd','youd','hell','shell','theyll','youll',
 ])
 
 
@@ -94,9 +102,9 @@ function wordDifficultyTier(word) {
 
 // Minimum tier required for this level
 function minTierForLevel(level) {
-  if (level === 'advanced') return 3     // B2+ (AWL + specialized)
-  if (level === 'intermediate') return 3  // B2+ (academic/professional)
-  return 1                               // Any tier
+  if (level === 'advanced')     return 4  // C1+ only (rare/specialized); fallback to 3 if sparse
+  if (level === 'intermediate') return 3  // B2+ (academic/professional vocab)
+  return 1                               // beginner: any tier
 }
 
 function minLength(level) {
