@@ -141,25 +141,39 @@ def fetch_via_ytdlp(video_id):
             '--sub-format', 'json3',
             '--output', f'{tmpdir}/%(id)s',
             '--no-playlist',
-            '--quiet',
-            '--no-warnings',
+            '--extractor-args', 'youtube:player_client=android,ios,web',
             url,
         ]
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            # Log ALL yt-dlp output for diagnostics (returncode + stderr + stdout snippet)
+            sys.stdout.write(f'[rc={result.returncode}] ')
+            for line in (result.stderr or '').strip().split('\n'):
+                if line.strip():
+                    sys.stdout.write(f'[err: {line.strip()[:80]}] ')
+            for line in (result.stdout or '').strip().split('\n')[:3]:
+                if line.strip():
+                    sys.stdout.write(f'[out: {line.strip()[:60]}] ')
+            sys.stdout.flush()
         except subprocess.TimeoutExpired:
             return None, 'ytdlp_timeout'
         except Exception as e:
             return None, f'ytdlp_err: {str(e)[:40]}'
 
+        # List all files in tmpdir for diagnostics
+        all_tmpdir = glob.glob(f'{tmpdir}/*')
+        if all_tmpdir:
+            sys.stdout.write(f'[files: {[os.path.basename(f) for f in all_tmpdir]}] ')
+            sys.stdout.flush()
+
         # Find any generated subtitle file
         sub_files = glob.glob(f'{tmpdir}/{video_id}*.json3')
         if not sub_files:
-            # Check if there are any subtitle files at all
+            # Also check for .vtt or other formats
             all_files = glob.glob(f'{tmpdir}/{video_id}*')
             if not all_files:
                 return None, 'no_captions'
-            return None, 'no_en'
+            return None, f'no_json3 ({[os.path.basename(f) for f in all_files]})'
 
         sub_file = sub_files[0]
         try:
