@@ -106,30 +106,53 @@
         <li
           v-for="word in vocabWords"
           :key="word.word"
-          class="flex items-center gap-3 px-4 py-2.5 min-h-[44px] cursor-pointer hover:bg-gray-800 transition-colors"
+          class="px-4 py-2.5 hover:bg-gray-800 transition-colors"
           :class="word.cardIndex === currentIndex ? 'bg-blue-900/30' : ''"
-          @click="onJump(word.cardIndex)"
         >
-          <!-- SRS status icon -->
-          <span class="text-sm w-5 flex-shrink-0 text-center">
-            {{ statusIcon(word.cardId) }}
-          </span>
-          <!-- Word -->
-          <span class="text-white text-sm font-medium flex-1 truncate"
-            :class="word.cardIndex === currentIndex ? 'text-blue-300' : ''"
-          >{{ word.word }}</span>
-          <!-- Meaning -->
-          <span class="text-gray-600 text-xs truncate max-w-[64px] flex-shrink-0">{{ word.meaning }}</span>
-          <!-- SRS label -->
-          <span
-            v-if="word.srsStatus !== 'new'"
-            class="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
-            :class="{
-              'bg-blue-900/60 text-blue-400': word.srsStatus === 'learning',
-              'bg-teal-900/60 text-teal-400': word.srsStatus === 'familiar',
-              'bg-yellow-900/60 text-yellow-400': word.srsStatus === 'mastered',
-            }"
-          >{{ { learning: '學習中', familiar: '熟悉', mastered: '精通' }[word.srsStatus] }}</span>
+          <!-- Word row (tappable → jump to card) -->
+          <div
+            class="flex items-center gap-3 min-h-[36px] cursor-pointer"
+            @click="onJump(word.cardIndex)"
+          >
+            <span class="text-sm w-5 flex-shrink-0 text-center">
+              {{ statusIcon(word.cardId) }}
+            </span>
+            <span class="text-white text-sm font-medium flex-1 truncate"
+              :class="word.cardIndex === currentIndex ? 'text-blue-300' : ''"
+            >{{ word.word }}</span>
+            <span class="text-gray-600 text-xs truncate max-w-[64px] flex-shrink-0">{{ word.meaning }}</span>
+            <span
+              v-if="word.srsStatus !== 'new'"
+              class="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
+              :class="{
+                'bg-blue-900/60 text-blue-400': word.srsStatus === 'learning',
+                'bg-teal-900/60 text-teal-400': word.srsStatus === 'familiar',
+                'bg-yellow-900/60 text-yellow-400': word.srsStatus === 'mastered',
+              }"
+            >{{ { learning: '學習中', familiar: '熟悉', mastered: '精通' }[word.srsStatus] }}</span>
+          </div>
+
+          <!-- Related videos thumbnail strip -->
+          <div
+            v-if="wordVideos[word.word] && wordVideos[word.word].length > 0"
+            class="flex gap-2 mt-2 overflow-x-auto pb-1 -mx-1 px-1"
+          >
+            <a
+              v-for="v in wordVideos[word.word].slice(0, 5)"
+              :key="v.id"
+              :href="`/feed/?v=${v.id}`"
+              class="flex-shrink-0 flex flex-col gap-1"
+              @click.stop
+            >
+              <img
+                :src="`https://img.youtube.com/vi/${v.id}/default.jpg`"
+                :alt="v.title"
+                class="w-20 h-[45px] object-cover rounded-lg bg-gray-800"
+                loading="lazy"
+              />
+              <p class="text-gray-500 text-[10px] w-20 leading-snug line-clamp-1">{{ v.title || v.id }}</p>
+            </a>
+          </div>
         </li>
       </ul>
 
@@ -153,6 +176,7 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { VOCAB_LISTS, loadWordList, getSrsStatus } from '@/lib/vocabLists.js'
 import { lookupMeaning, getVocabCategories } from '@/lib/lookup.js'
+import { getVocabVideos } from '@/services/api.js'
 
 const props = defineProps({
   cards:        { type: Array,    required: true },
@@ -250,6 +274,7 @@ function onJump(index) {
 // ── Vocab list tab ─────────────────────────────────────────────────────────────
 const listLoading = ref(false)
 const vocabWords  = ref([])  // [{ word, meaning, srsStatus, cardIndex, cardId }]
+const wordVideos  = ref({})  // { word: Video[] } — related videos per word
 
 const activeListMeta = computed(() => VOCAB_LISTS.find(l => l.id === activeTab.value) ?? null)
 
@@ -263,15 +288,14 @@ async function switchTab(listId) {
 async function loadVocabList(listId) {
   listLoading.value = true
   vocabWords.value = []
+  wordVideos.value = {}
   try {
     const catKey = LIST_TO_CAT[listId]
     let matchFn
 
     if (catKey) {
-      // Use getVocabCategories (morphological matching — same logic as card badges)
       matchFn = (card) => getVocabCategories(card.keyword).includes(catKey)
     } else {
-      // toefl: word-list exact match (AWL sublist 1-5)
       const words = await loadWordList(listId)
       const wordSet = new Set(words.map(w => w.toLowerCase()))
       matchFn = (card) => wordSet.has(card.keyword.toLowerCase())
@@ -287,6 +311,16 @@ async function loadVocabList(listId) {
         cardIndex: index,
         cardId: card.id,
       }))
+
+    // Load related videos for all matched words in parallel (fire-and-forget)
+    const words = vocabWords.value.map(w => w.word)
+    Promise.all(
+      words.map(word =>
+        getVocabVideos(listId, word)
+          .then(videos => { wordVideos.value = { ...wordVideos.value, [word]: videos } })
+          .catch(() => {})
+      )
+    )
   } finally {
     listLoading.value = false
   }
