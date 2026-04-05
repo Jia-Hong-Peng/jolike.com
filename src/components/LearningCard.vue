@@ -108,7 +108,6 @@ import { computed, ref, watch, onMounted } from 'vue'
 import VideoClip from './VideoClip.vue'
 import HighlightedSentence from './HighlightedSentence.vue'
 import { lookupDefinition } from '@/composables/useDictionary.js'
-import { lookupNgslDef } from '@/lib/lookup.js'
 
 const props = defineProps({
   card: {
@@ -195,8 +194,10 @@ async function loadCardData() {
     dictData.value        = dict
     translationText.value = sentence
 
-    // NGSL/TSL fallback: if Free Dictionary has no definition, use NGSL easy English definition
+    // NGSL/TSL fallback: if Free Dictionary has no definition, lazy-load ngsl.js
+    // (~246KB, only needed for words not in Free Dictionary)
     if (!dictData.value?.definition && props.card.type === 'word') {
+      const { lookupNgslDef } = await import('@/lib/ngsl.js')
       const ngslDef = lookupNgslDef(props.card.lemma || props.card.keyword)
       if (ngslDef) {
         dictData.value = { ...(dictData.value || {}), definition: ngslDef }

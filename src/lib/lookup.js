@@ -10,17 +10,17 @@
  *   cefr_vocab.json  — CEFR A1-C2 tiers (~110KB)
  *   awl_nawl.json    — AWL/NAWL/TSL sublists (~32KB)
  *   coca5000.json    — business vocab fallback (~9KB)
- *   ngsl_defs.json   — NGSL+TSL easy English definitions, 4054 words
  *
  * nlp.js imports these functions from here so the two files share a single
  * implementation with no duplication.
+ *
+ * Note: lookupNgslDef lives in ngsl.js (lazy-loaded separately, ~246KB).
  */
 
 import awlWords      from '@/data/coca5000.json'
 import awlNawlData   from '@/data/awl_nawl.json'
 import cedict        from '@/data/cedict.json'
 import cefrVocab     from '@/data/cefr_vocab.json'
-import ngslDefs      from '@/data/ngsl_defs.json'
 
 // Primary: CEFR-J + Octanove vocabulary profile
 const cefrMap    = cefrVocab
@@ -149,8 +149,3 @@ export function lookupMeaning(keyword) {
     || ''
 }
 
-// ── NGSL/TSL easy English definition ─────────────────────────────────────────
-export function lookupNgslDef(keyword) {
-  const key = keyword.toLowerCase()
-  return ngslDefs[key] || ngslDefs[key.replace(/-/g, ' ')] || ''
-}

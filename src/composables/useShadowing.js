@@ -16,6 +16,7 @@ export function useShadowing() {
   let stream = null
   let audioUrl = null
   let stopTimeout = null
+  let cancelled = false  // set by reset() so onstop knows to abort
 
   const MAX_RECORD_MS = 10_000  // 10s cap
 
@@ -27,6 +28,7 @@ export function useShadowing() {
    */
   async function startRecording() {
     if (state.value !== 'idle') return
+    cancelled = false
 
     // Check browser support
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
@@ -55,9 +57,12 @@ export function useShadowing() {
     }
 
     recorder.onstop = () => {
-      // Clean up mic stream
-      stream.getTracks().forEach(t => t.stop())
-      stream = null
+      // Guard: reset() may have already cleaned up stream and set cancelled
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop())
+        stream = null
+      }
+      if (cancelled) return  // reset() was called — discard recording, stay idle
 
       const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
       if (audioUrl) URL.revokeObjectURL(audioUrl)
@@ -98,9 +103,10 @@ export function useShadowing() {
   }
 
   function reset() {
+    cancelled = true
     clearTimeout(stopTimeout)
     if (recorder && recorder.state === 'recording') {
-      recorder.stop()
+      recorder.stop()  // triggers onstop async, but cancelled=true makes it bail early
     }
     if (stream) {
       stream.getTracks().forEach(t => t.stop())

@@ -28,8 +28,9 @@ import opalPhrasesData from '@/data/opal_phrases.json' // Oxford OPAL academic p
 
 // Pure lookup functions shared with lookup.js (no compromise.js dependency)
 // lookup.js imports the data directly; nlp.js re-uses the same implementations.
-export { morphStems, canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, lookupNgslDef } from '@/lib/lookup.js'
-import { morphStems, canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, lookupNgslDef } from '@/lib/lookup.js'
+export { morphStems, canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning } from '@/lib/lookup.js'
+export { lookupNgslDef } from '@/lib/ngsl.js'
+import { canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning } from '@/lib/lookup.js'
 
 // OPAL academic phrases: Set of Oxford Phrasal Academic Lexicon entries
 // 572 academic collocations: "as a result", "in terms of", "based on", etc.
