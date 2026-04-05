@@ -36,8 +36,9 @@ import { canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, getVocabC
 // 572 academic collocations: "as a result", "in terms of", "based on", etc.
 const opalPhraseSet = new Set(opalPhrasesData)
 
-const MAX_WORDS   = 8   // quality over quantity — fewer high-value cards beats many mediocre ones
-const MAX_PHRASES = 5
+// No hard cap on words/phrases — extract everything that passes the quality filter.
+// The level + tier threshold + knownWords filter determine what appears.
+// Sorted by learningScore so highest-value vocab-list words always come first.
 const CLIP_MIN_S  = 3
 const MIN_WORDS_BEFORE_FALLBACK = 5  // if fewer words pass tier, drop tier by 1
 
@@ -212,7 +213,6 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
   const seenKeywords = new Set()
   const words = []
   for (const [word, freq] of rankedWords) {
-    if (words.length >= MAX_WORDS) break
     // Normalize to canonical (lemma) form so card shows "chaperone" not "chaperoning"
     const canonical = canonicalForm(word)
     if (seenKeywords.has(canonical)) continue  // deduplicate variants (run/running → both "run")
@@ -286,7 +286,6 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
 
   const phrases = []
   for (const [phrase, freq] of rankedPhrases) {
-    if (phrases.length >= MAX_PHRASES) break
     if (seenKeywords.has(phrase)) continue
     seenKeywords.add(phrase)
     const seg = phraseFirstSeg.get(phrase)
