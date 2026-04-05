@@ -146,7 +146,7 @@
             :title="currentLevel.desc"
             @click="cycleLevel"
           >
-            {{ currentLevel.label }}
+            {{ currentLevel.label }} ⟳
           </button>
         </div>
       </div>

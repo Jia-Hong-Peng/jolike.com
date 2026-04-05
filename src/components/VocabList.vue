@@ -31,9 +31,9 @@
         v-for="(card, index) in cards"
         :key="card.id"
         class="flex items-center gap-3 px-4 py-3 min-h-[52px] cursor-pointer transition-colors"
-        :class="index === currentIndex
-          ? 'bg-blue-900/40'
-          : 'hover:bg-gray-800'"
+        :class="[
+          index === currentIndex ? 'bg-blue-900/40 vocab-list-active' : 'hover:bg-gray-800'
+        ]"
         @click="onJump(index)"
       >
         <!-- Status indicator -->
@@ -67,7 +67,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, nextTick } from 'vue'
 
 const props = defineProps({
   cards: { type: Array, required: true },
@@ -76,6 +76,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'jump'])
+
+onMounted(() => {
+  nextTick(() => {
+    const activeItem = document.querySelector('.vocab-list-active')
+    activeItem?.scrollIntoView({ block: 'center', behavior: 'instant' })
+  })
+})
 
 const knownCount = computed(() => props.cards.filter(c => props.cardStatus(c.id) === 'known').length)
 const unseenCount = computed(() => props.cards.filter(c => !props.cardStatus(c.id)).length)

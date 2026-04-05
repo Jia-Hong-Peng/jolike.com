@@ -201,17 +201,22 @@ import { getLibrary, deleteLibraryVideo } from '@/services/api.js'
 
 const SRS_PREFIX = 'jolike_srs_'
 
-function learnedCount(videoId) {
-  let count = 0
+// Build a videoId → learned-word-count map once (avoids O(n×m) in v-for)
+const learnedByVideo = (() => {
+  const map = new Map()
   for (let i = 0; i < localStorage.length; i++) {
     const k = localStorage.key(i)
     if (!k?.startsWith(SRS_PREFIX)) continue
     try {
       const entry = JSON.parse(localStorage.getItem(k) || '{}')
-      if (entry.videoId === videoId) count++
+      if (entry.videoId) map.set(entry.videoId, (map.get(entry.videoId) ?? 0) + 1)
     } catch { /* skip */ }
   }
-  return count
+  return map
+})()
+
+function learnedCount(videoId) {
+  return learnedByVideo.get(videoId) ?? 0
 }
 
 const ADMIN_KEY = 'jolike_admin_token'
