@@ -324,11 +324,11 @@ const searchQuery = ref('')
 const activeFilter = ref('all')
 const pendingDelete = ref(null)
 
-const filters = [
-  { key: 'all',      label: '全部' },
-  { key: 'due',      label: '待複習' },
-  { key: 'mastered', label: '精通' },
-]
+const filters = computed(() => [
+  { key: 'all',      label: `全部 (${allEntries.value.length})` },
+  { key: 'due',      label: `待複習 (${dueCount.value})` },
+  { key: 'mastered', label: `精通 (${allEntries.value.filter(e => e.interval > 30).length})` },
+])
 
 const filteredWords = computed(() => {
   const q = searchQuery.value.toLowerCase().trim()
