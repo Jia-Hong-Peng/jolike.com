@@ -14,6 +14,28 @@
 
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
+// Headers that make the watch-page request look like a real browser navigation.
+// sec-fetch-* and sec-ch-ua are the most effective signals against bot detection.
+const WATCH_PAGE_HEADERS = {
+  'User-Agent': BROWSER_UA,
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache',
+  'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+  'sec-ch-ua-mobile': '?0',
+  'sec-ch-ua-platform': '"macOS"',
+  'sec-fetch-dest': 'document',
+  'sec-fetch-mode': 'navigate',
+  'sec-fetch-site': 'none',
+  'sec-fetch-user': '?1',
+  'Upgrade-Insecure-Requests': '1',
+  // Bypass YouTube's GDPR consent page.
+  // SOCS=CAI is the current (2024+) minimal consent cookie.
+  'Cookie': 'SOCS=CAI; YSC=1; VISITOR_INFO1_LIVE=1',
+}
+
 /**
  * Extract video ID from a YouTube URL.
  * Supports youtube.com/watch?v= and youtu.be/
@@ -45,15 +67,7 @@ export async function fetchTranscript(videoId) {
   let html
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        // Bypass YouTube's GDPR consent page.
-        // SOCS=CAI is the current (2024+) minimal consent cookie;
-        // CONSENT=YES+cb was the pre-2023 format (now ignored by YouTube).
-        'Cookie': 'SOCS=CAI; YSC=1; VISITOR_INFO1_LIVE=1',
-      },
+      headers: WATCH_PAGE_HEADERS,
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) return { error: 'NO_CAPTIONS' }
