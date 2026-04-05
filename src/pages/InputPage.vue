@@ -61,7 +61,7 @@
                  disabled:cursor-not-allowed text-white font-semibold rounded-2xl
                  py-4 text-sm transition-colors flex items-center justify-center gap-1.5
                  min-h-[56px]"
-          :disabled="loading || !url.trim()"
+          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS'"
           @click="submitWithMode('feed')"
         >
           <span v-if="loading && activeMode === 'feed'" class="animate-spin text-lg">⟳</span>
@@ -73,7 +73,7 @@
                  disabled:cursor-not-allowed text-white font-semibold rounded-2xl
                  py-4 text-sm transition-colors flex items-center justify-center gap-1.5
                  min-h-[56px]"
-          :disabled="loading || !url.trim()"
+          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS'"
           @click="submitWithMode('shadow')"
         >
           <span v-if="loading && activeMode === 'shadow'" class="animate-spin text-lg">⟳</span>
@@ -82,9 +82,9 @@
         </button>
       </div>
 
-      <!-- Retry hint for non-URL errors -->
+      <!-- Retry hint for non-URL errors (not NO_CAPTIONS — retrying the same URL won't help) -->
       <button
-        v-if="errorCode && errorCode !== 'INVALID_URL'"
+        v-if="errorCode && errorCode !== 'INVALID_URL' && errorCode !== 'NO_CAPTIONS'"
         class="mt-3 w-full text-gray-400 text-sm underline"
         @click="retry"
       >
