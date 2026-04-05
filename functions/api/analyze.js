@@ -81,10 +81,10 @@ export async function onRequestPost(context) {
     return jsonError(429, 'RATE_LIMITED', 'YouTube 請求過於頻繁，請稍後再試')
   }
   if (result.error === 'NO_CAPTIONS') {
-    // If it's a stub, Cloudflare IPs may be blocked by YouTube — don't delete.
-    // The transcript will be fetched via GitHub Actions (unblocked IPs).
+    // If it's a stub, Cloudflare IPs may be blocked by YouTube — auto-trigger GitHub Actions.
     if (isStub) {
-      return jsonError(422, 'TRANSCRIPT_PENDING', '字幕正在後台處理中，請稍後再試或直接從學習動態開啟影片')
+      triggerGithubFetch(env, cached.channel_id).catch(() => {})
+      return jsonError(422, 'TRANSCRIPT_PENDING', '字幕抓取中，約 1-2 分鐘後重試即可開啟')
     }
     return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
   }
@@ -133,6 +133,30 @@ async function fetchOEmbedTitle(videoId) {
   } catch {
     return ''
   }
+}
+
+/**
+ * Fire-and-forget: trigger GitHub Actions to fetch transcripts for a channel.
+ * Uses the same workflow as the admin UI button.
+ */
+async function triggerGithubFetch(env, channelId) {
+  const token = env.GITHUB_TOKEN
+  if (!token) return
+  const body = { ref: 'main', inputs: { limit: '50' } }
+  if (channelId) body.inputs.channel = channelId
+  await fetch(
+    'https://api.github.com/repos/Jia-Hong-Peng/jolike.com/actions/workflows/fetch-transcripts.yml/dispatches',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'jolike.com',
+      },
+      body: JSON.stringify(body),
+    }
+  )
 }
 
 function jsonOk(data) {

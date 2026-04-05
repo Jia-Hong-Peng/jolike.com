@@ -11,7 +11,7 @@
  */
 export async function getVideo(DB, id) {
   const row = await DB
-    .prepare('SELECT id, title, duration_seconds, analyzed_at, raw_transcript FROM videos WHERE id = ?')
+    .prepare('SELECT id, channel_id, title, duration_seconds, analyzed_at, raw_transcript FROM videos WHERE id = ?')
     .bind(id)
     .first()
 
@@ -19,6 +19,7 @@ export async function getVideo(DB, id) {
 
   return {
     id: row.id,
+    channel_id: row.channel_id,
     title: row.title,
     duration_seconds: row.duration_seconds,
     analyzed_at: row.analyzed_at,
