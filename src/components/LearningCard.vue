@@ -14,7 +14,7 @@
 
     <!-- Card info area (bottom) -->
     <div class="bg-gray-900 px-6 pt-5 pb-4 flex flex-col gap-2 rounded-t-3xl -mt-4 relative z-10">
-<!-- Type badge + tier + frequency -->
+<!-- Type badge + tier + AWL + frequency -->
       <div class="flex items-center gap-2 flex-wrap">
         <span class="text-xs font-semibold px-3 py-1 rounded-full" :class="typeBadgeClass">
           {{ typeLabel }}
@@ -26,6 +26,15 @@
           :title="tierTitle"
         >
           {{ tierLabel }}
+        </span>
+        <!-- AWL / NAWL badge — signals IELTS/TOEFL exam relevance -->
+        <span
+          v-if="card.awl_sublist"
+          class="text-xs px-2 py-1 rounded-full font-bold"
+          :class="awlBadgeClass"
+          :title="awlBadgeTitle"
+        >
+          {{ awlBadgeLabel }}
         </span>
         <span
           v-if="card.frequency > 1"
@@ -262,5 +271,31 @@ const frequencyBadgeClass = computed(() => {
   if (f >= 5) return 'bg-red-900/60 text-red-300'
   if (f >= 3) return 'bg-orange-900/60 text-orange-300'
   return 'bg-gray-800 text-gray-400'
+})
+
+// AWL / NAWL badge — shows academic exam relevance (IELTS / TOEFL)
+const awlBadgeLabel = computed(() => {
+  const s = props.card.awl_sublist
+  if (!s) return ''
+  if (s <= 10) return `AWL ${s}`  // AWL Sublist 1-10
+  return 'NAWL'                   // New Academic Word List
+})
+
+const awlBadgeTitle = computed(() => {
+  const s = props.card.awl_sublist
+  if (!s) return ''
+  if (s === 1)  return 'Academic Word List — Sublist 1（最高頻學術詞，IELTS/TOEFL 核心）'
+  if (s <= 5)   return `Academic Word List — Sublist ${s}（高頻學術詞，IELTS/TOEFL 重要）`
+  if (s <= 10)  return `Academic Word List — Sublist ${s}（學術詞彙，IELTS 進階）`
+  return 'New Academic Word List（現代學術語料高頻詞，TOEFL/IELTS 進階）'
+})
+
+const awlBadgeClass = computed(() => {
+  const s = props.card.awl_sublist
+  if (!s) return ''
+  if (s <= 3) return 'bg-amber-900/70 text-amber-300 border border-amber-700'   // AWL 1-3: gold = critical
+  if (s <= 7) return 'bg-yellow-900/60 text-yellow-400 border border-yellow-800' // AWL 4-7: yellow = important
+  if (s <= 10) return 'bg-stone-800 text-stone-400 border border-stone-600'      // AWL 8-10: muted = useful
+  return 'bg-indigo-900/60 text-indigo-300 border border-indigo-700'             // NAWL: indigo = modern academic
 })
 </script>

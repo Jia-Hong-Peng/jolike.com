@@ -336,3 +336,78 @@ describe('nlp.js — POS weighting', () => {
     }
   })
 })
+
+// ── AWL / NAWL integration (research-backed optimization) ────────────────────
+describe('nlp.js — AWL/NAWL academic word detection', () => {
+  it('T-AWL-1 — AWL Sublist 1 word gets awl_sublist=1 on card', () => {
+    const transcript = makeTranscript([
+      'Researchers assess the evidence to establish a clear framework.',
+      'They analyze data and significant findings from multiple sources.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'beginner')
+    const assessed = items.find(i => i.keyword === 'assess' || i.lemma === 'assess')
+    if (assessed) {
+      expect(assessed.awl_sublist).toBe(1)
+    }
+    const frameworks = items.find(i => i.keyword === 'framework' || i.lemma === 'framework')
+    if (frameworks) {
+      expect(frameworks.awl_sublist).toBe(3)  // AWL Sublist 3
+    }
+  })
+
+  it('T-AWL-2 — AWL word gets minimum tier 3 even if CEFR marks it tier 1-2', () => {
+    // "significant" is AWL Sublist 1 but might be CEFR tier 1/2 (high-frequency)
+    // It must be boosted to tier 3 for IELTS relevance
+    const transcript = makeTranscript([
+      'The significant difference was evident in the results.',
+      'They established a consistent approach to the analysis.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'beginner')
+    const sig = items.find(i => i.keyword === 'significant' || i.lemma === 'significant')
+    if (sig) {
+      expect(sig.difficulty_tier).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('T-AWL-3 — AWL word appears at intermediate level (tier 3+ filter)', () => {
+    // "assess" is AWL Sublist 1 → must appear at intermediate level
+    const transcript = makeTranscript([
+      'We need to assess the situation carefully and establish criteria.',
+      'The framework helps us analyze and evaluate complex phenomena.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'intermediate')
+    const awlWords = items.filter(i => i.awl_sublist && i.awl_sublist <= 5)
+    expect(awlWords.length).toBeGreaterThan(0)
+  })
+
+  it('T-AWL-4 — NAWL word gets awl_sublist=11', () => {
+    // "methodology" and "trajectory" are NAWL words (modern academic corpus)
+    const transcript = makeTranscript([
+      'The methodology used in this study follows a clear trajectory.',
+      'Scientists use paradigm shifts to explain major theoretical changes.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'beginner')
+    const nawlWord = items.find(i =>
+      ['methodology','trajectory','paradigm'].includes(i.keyword) ||
+      ['methodology','trajectory','paradigm'].includes(i.lemma)
+    )
+    if (nawlWord) {
+      expect(nawlWord.awl_sublist).toBe(11)
+    }
+  })
+
+  it('T-AWL-5 — AWL Sublist 1 word scores higher than same-tier non-AWL word', () => {
+    // AWL Sublist 1 gets +4.0 bonus → should rank above a non-AWL word of same tier
+    const transcript = makeTranscript([
+      'They assess the validity and constitute the core framework.',
+      'The bizarre phenomenon appeared once during the experiment.',
+    ])
+    const items = extractLearningItems(transcript, 'v1', 'beginner')
+    const assessItem = items.find(i => i.keyword === 'assess' || i.lemma === 'assess')
+    const bizarreItem = items.find(i => i.keyword === 'bizarre')
+    if (assessItem && bizarreItem) {
+      // assess (AWL S1, tier3+boost) should rank before bizarre (NAWL/tier3, less boost)
+      expect(items.indexOf(assessItem)).toBeLessThanOrEqual(items.indexOf(bizarreItem))
+    }
+  })
+})

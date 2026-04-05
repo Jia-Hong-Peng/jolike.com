@@ -15,18 +15,31 @@
  *   beginner     — tier 1+ (all content words, min 3 chars)
  *   intermediate — tier 3+ (B2 academic/professional; fallback to tier 2 if sparse)
  *   advanced     — tier 4+ (C1+ rare/specialized only; fallback to tier 3 → 2 if sparse)
+ *
+ * Academic word priority (research-backed):
+ *   AWL Sublist 1-10: Academic Word List (Coxhead 2000) — B2 minimum, scored by sublist rank
+ *   NAWL (sublist 11): New Academic Word List (Browne et al. 2013) — modern academic vocab
+ *   Coverage: BNC/COCA K1-K3 + AWL = 95% of IELTS text (SAGE Open 2022)
+ *             NGSL + TSL = 98.5% of TOEIC (Browne & Culligan 2021)
  */
 
 import nlp from 'compromise'
-import awlWords from '@/data/coca5000.json'   // AWL + business vocab = B2 tier fallback
+import awlWords from '@/data/coca5000.json'       // business vocab fallback (kept for B2 tier)
+import awlNawlData from '@/data/awl_nawl.json'    // AWL sublist 1-10 + NAWL (11), 1330 entries
 import cedict from '@/data/cedict.json'
-import cefrVocab from '@/data/cefr_vocab.json'  // CEFR A1-C2 (8818 words, Open Language Profiles)
+import cefrVocab from '@/data/cefr_vocab.json'    // CEFR A1-C2 (8818 words, Open Language Profiles)
 
 // Primary: CEFR-J + Octanove vocabulary profile (Open Language Profiles project)
 // { word: tier } where 1=A1/A2, 2=B1, 3=B2, 4=C1/C2
 const cefrMap = cefrVocab
 
-// Fallback: AWL (Academic Word List + business vocab) — maps to B2 tier
+// Academic word map: word → sublist number
+//   1-10 = AWL sublist (1 = most frequent/important academic, 10 = least)
+//   11   = NAWL (New Academic Word List — modern academic corpus, 288M words)
+// Research: AWL Sublist 1 gives ~2% IELTS reading coverage per sublist
+const awlNawlMap = awlNawlData   // { word: sublist_num }
+
+// Legacy business vocab fallback (kept for coverage of TOEIC/business terms)
 const awlSet = new Set(awlWords.map(w => w.toLowerCase()))
 
 const MAX_WORDS   = 8   // quality over quantity — fewer high-value cards beats many mediocre ones
@@ -151,26 +164,53 @@ function canonicalForm(word) {
   return w  // unknown word with no matching stem — keep as-is
 }
 
+// ── Academic word lookup ───────────────────────────────────────────────────────
+// Returns AWL sublist (1-10) or 11 for NAWL, or 0 if not academic
+function awlSublist(word) {
+  const w = word.toLowerCase()
+  if (awlNawlMap[w] !== undefined) return awlNawlMap[w]
+  for (const stem of morphStems(w)) {
+    if (awlNawlMap[stem] !== undefined) return awlNawlMap[stem]
+  }
+  return 0
+}
+
 // ── Difficulty tier lookup (CEFR-based with morphological stem fallback) ──────
 // Returns 1=A1/A2, 2=B1, 3=B2, 4=C1/C2
+//
+// Academic word override (research-backed):
+//   AWL (sublist 1-10) and NAWL words are academically significant for IELTS/TOEFL.
+//   Research shows AWL covers ~10% of academic texts (Coxhead 2000).
+//   These words receive a minimum tier of 3 (B2) so they always surface
+//   at intermediate level, even if CEFR frequency marks them as B1.
 function wordDifficultyTier(word) {
   const w = word.toLowerCase()
 
   // Direct lookup in CEFR vocabulary
-  if (cefrMap[w] !== undefined) return cefrMap[w]
+  let tier = cefrMap[w]
 
-  const stems = new Set(morphStems(w))
-
-  let bestTier = null
-  for (const stem of stems) {
-    const t = cefrMap[stem]
-    if (t !== undefined && (bestTier === null || t < bestTier)) bestTier = t
+  // Morphological stem fallback — find lowest (easiest) tier among all stems
+  if (tier === undefined) {
+    for (const stem of morphStems(w)) {
+      const t = cefrMap[stem]
+      if (t !== undefined && (tier === undefined || t < tier)) tier = t
+    }
   }
-  if (bestTier !== null) return bestTier
 
-  // Final fallback: AWL = B2 tier, unknown = C1+ (tier 4)
+  // Academic word override: AWL/NAWL words are at least B2 (tier 3)
+  // This ensures important IELTS/TOEFL vocabulary is never hidden at intermediate level.
+  // Note: tier 4 (C1+) is preserved — we only bump UP, never down.
+  const sublist = awlSublist(w)
+  if (sublist > 0) {
+    if (tier !== undefined) return Math.max(tier, 3)
+    return 3
+  }
+
+  if (tier !== undefined) return tier
+
+  // Business/general high-freq fallback (legacy coca5000 list)
   if (awlSet.has(w)) return 3
-  for (const stem of stems) {
+  for (const stem of morphStems(w)) {
     if (awlSet.has(stem)) return 3
   }
   return 4 // C1+ specialized / unknown
@@ -194,8 +234,19 @@ function minLength(level) {
 function learningScore(word, freq, posMult = 1.0) {
   const tier = wordDifficultyTier(word)
   const cedictBoost = cedict[word] ? 1.2 : 1.0
-  // Tier is the primary signal (scale 0–40). Frequency + POS + cedict are secondary.
-  return tier * 10 + Math.log1p(freq) * posMult * cedictBoost
+
+  // AWL sublist priority bonus (research-backed: sublist 1 = highest IELTS coverage)
+  // Formula: sublist 1 → +4.0pts, sublist 5 → +2.0pts, sublist 10 → +0.4pts, NAWL → +0.5pts
+  // Ensures critical academic vocabulary (assess, constitute, criteria) surfaces first.
+  const sub = awlSublist(word)
+  const awlBoost = sub >= 1 && sub <= 10
+    ? (11 - sub) * 0.4   // AWL: sublist 1=4.0, sublist 10=0.4
+    : sub === 11
+      ? 0.5              // NAWL: modest boost (modern academic, empirical, paradigm)
+      : 0
+
+  // Tier is the primary signal (scale 10–40). Frequency + POS + cedict + AWL are secondary.
+  return tier * 10 + Math.log1p(freq) * posMult * cedictBoost + awlBoost
 }
 
 export function lookupMeaning(keyword) {
@@ -297,13 +348,16 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     if (seenKeywords.has(canonical)) continue  // deduplicate variants (run/running → both "run")
     seenKeywords.add(canonical)
     const seg = pickBestSeg(word, wordAllSegs.get(word))
+    const wordTier = wordDifficultyTier(word)
+    const wordAwlSub = awlSublist(canonical !== word ? canonical : word)
     words.push({
       type: 'word',
       keyword: word,                               // inflected form as heard in the video
       lemma: canonical !== word ? canonical : undefined,  // base/dictionary form (shown as supplementary)
       meaning_zh: lookupMeaning(canonical),        // cedict/MyMemory lookup using base form
       frequency: freq,
-      difficulty_tier: wordDifficultyTier(word),
+      difficulty_tier: wordTier,
+      awl_sublist: wordAwlSub > 0 ? wordAwlSub : undefined,  // 1-10=AWL sublist, 11=NAWL, undefined=none
       sentence: seg.text,
       ...getClip(seg),
     })
