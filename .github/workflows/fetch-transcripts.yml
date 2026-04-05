@@ -1,8 +1,9 @@
 name: Fetch Channel Transcripts
 
 # Why GitHub Actions and not Cloudflare Workers:
-# YouTube silently blocks Cloudflare's Singapore datacenter IPs for InnerTube requests.
-# GitHub Actions runs on GitHub/Azure IPs which YouTube does not block.
+# YouTube silently blocks Cloudflare's Singapore datacenter IPs for watch page requests.
+# GitHub Actions runs on GitHub/Azure IPs which serve different (less restricted) content.
+# We use youtube-transcript-api which handles YouTube's anti-bot measures reliably.
 
 on:
   workflow_dispatch:
@@ -24,9 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: '22'
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install youtube-transcript-api
 
       - name: Fetch transcripts
         env:
@@ -39,4 +43,4 @@ jobs:
           fi
           ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
 
-          node scripts/fetch-channel-transcripts.mjs $ARGS
+          python scripts/fetch-transcripts.py $ARGS
