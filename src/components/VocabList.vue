@@ -152,7 +152,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { VOCAB_LISTS, loadWordList, getSrsStatus } from '@/lib/vocabLists.js'
-import { lookupMeaning } from '@/lib/lookup.js'
+import { lookupMeaning, getVocabCategories } from '@/lib/lookup.js'
 
 const props = defineProps({
   cards:        { type: Array,    required: true },
@@ -220,16 +220,34 @@ async function switchTab(listId) {
   await loadVocabList(listId)
 }
 
+// Map VocabList tab IDs to getVocabCategories category keys
+const LIST_TO_CAT = {
+  toeic:    'toeic',
+  ielts:    'ielts',
+  academic: 'academic',
+  advanced: 'advanced_academic',
+}
+
 async function loadVocabList(listId) {
   listLoading.value = true
   vocabWords.value = []
   try {
-    const words = await loadWordList(listId)
-    const wordSet = new Set(words.map(w => w.toLowerCase()))
-    // Only show cards from the current video that belong to this vocab list
+    const catKey = LIST_TO_CAT[listId]
+    let matchFn
+
+    if (catKey) {
+      // Use getVocabCategories (morphological matching — same logic as card badges)
+      matchFn = (card) => getVocabCategories(card.keyword).includes(catKey)
+    } else {
+      // toefl: word-list exact match (AWL sublist 1-5)
+      const words = await loadWordList(listId)
+      const wordSet = new Set(words.map(w => w.toLowerCase()))
+      matchFn = (card) => wordSet.has(card.keyword.toLowerCase())
+    }
+
     vocabWords.value = props.cards
       .map((card, index) => ({ card, index }))
-      .filter(({ card }) => wordSet.has(card.keyword.toLowerCase()))
+      .filter(({ card }) => matchFn(card))
       .map(({ card, index }) => ({
         word: card.keyword,
         meaning: card.meaning_zh,
