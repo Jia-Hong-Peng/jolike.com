@@ -188,9 +188,9 @@ const loopEnabled = ref(false)
 
 // Level: persisted in localStorage
 const LEVELS = [
-  { key: 'beginner',     label: '初級', desc: '顯示 A1/A2 以上詞彙（包含基礎詞）' },
-  { key: 'intermediate', label: '中級', desc: '顯示 B1 以上詞彙（過濾基礎詞）' },
-  { key: 'advanced',     label: '進階', desc: '顯示 B2/C1+ 學術與專業詞彙' },
+  { key: 'beginner',     label: '初級', desc: '顯示所有詞彙，含基礎 A1/A2 單字（英文初學者適用）' },
+  { key: 'intermediate', label: '中級', desc: '中高級 B2+ 詞彙為主，適合 IELTS/TOEFL 備考（推薦）' },
+  { key: 'advanced',     label: '進階', desc: '進階 C1+ 學術術語，適合衝高分或英文已流利者' },
 ]
 const level = ref(localStorage.getItem('jolike_level') || 'intermediate')
 
@@ -259,7 +259,9 @@ function onTouchEnd(e) {
   if (delta > 60) {
     // Swipe up → next card (equals "known")
     animateCardOut(() => {
-      markCard(currentCard.value?.id, 'known')
+      const card = currentCard.value
+      markCard(card?.id, 'known')
+      if (card) scheduleReview(card)
       next()
     })
   }
@@ -275,7 +277,9 @@ function animateCardOut(callback) {
 
 // --- ActionBar handlers ---
 function onMark({ id, status }) {
+  const card = currentCard.value
   markCard(id, status)
+  if (card) scheduleReview(card)  // register card in SRS (skips if already exists)
   animateCardOut(() => next())
 }
 
@@ -284,6 +288,8 @@ function onPrev() {
 }
 
 function onNext() {
+  const card = currentCard.value
+  if (card) scheduleReview(card)  // skip (▶) also registers card for review
   animateCardOut(() => next())
 }
 
@@ -305,10 +311,13 @@ function onKeyDown(e) {
   if (!currentCard.value || isComplete.value) return
   if (e.key === 'ArrowRight') {
     e.preventDefault()
-    markCard(currentCard.value?.id, 'known')
+    const card = currentCard.value
+    markCard(card?.id, 'known')
+    if (card) scheduleReview(card)
     animateCardOut(() => next())
   } else if (e.key === 'ArrowDown') {
     e.preventDefault()
+    if (currentCard.value) scheduleReview(currentCard.value)
     animateCardOut(() => next())
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
     e.preventDefault()

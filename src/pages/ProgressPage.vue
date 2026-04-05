@@ -126,6 +126,15 @@
       >
         複習到期單字（{{ dueCount }} 個）
       </button>
+
+      <!-- Export / backup -->
+      <button
+        class="w-full bg-gray-900 border border-gray-700 text-gray-400 py-3 rounded-2xl font-medium text-sm min-h-[48px] hover:bg-gray-800 transition-colors"
+        :title="`匯出 ${totalWords} 個詞彙的學習記錄（JSON）`"
+        @click="exportData"
+      >
+        ↓ 匯出詞彙記錄備份
+      </button>
 </div>
   </div>
 </template>
@@ -231,5 +240,17 @@ const tierBreakdown = computed(() => {
 
 function goHome() {
   window.location.href = '/'
+}
+
+function exportData() {
+  const data = getAllEntries()
+  const json = JSON.stringify(data, null, 2)
+  const blob = new Blob([json], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `jolike-vocabulary-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 </script>

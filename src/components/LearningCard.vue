@@ -263,8 +263,8 @@ const frequencyLabel = computed(() => {
   return `${f} 次`
 })
 
-const TIER_LABELS  = { 1: 'A1-A2', 2: 'B1', 3: 'B2', 4: 'C1+' }
-const TIER_TITLES  = { 1: '基礎詞彙 (A1/A2)', 2: '中級詞彙 (B1)', 3: '學術詞彙 (B2)', 4: '進階詞彙 (C1+)' }
+const TIER_LABELS  = { 1: '基礎', 2: '初中級', 3: '中高級', 4: '進階' }
+const TIER_TITLES  = { 1: '基礎詞彙 (CEFR A1/A2)', 2: '中級詞彙 (CEFR B1)', 3: '學術詞彙 (CEFR B2)', 4: '進階詞彙 (CEFR C1+)' }
 const tierLabel    = computed(() => TIER_LABELS[props.card.difficulty_tier] ?? '')
 const tierTitle    = computed(() => TIER_TITLES[props.card.difficulty_tier] ?? '')
 const tierBadgeClass = computed(() => {
@@ -286,9 +286,11 @@ const frequencyBadgeClass = computed(() => {
 const awlBadgeLabel = computed(() => {
   const s = props.card.awl_sublist
   if (!s) return ''
-  if (s <= 10) return `AWL ${s}`  // AWL Sublist 1-10
-  if (s === 11) return 'NAWL'     // New Academic Word List
-  return 'TSL'                    // TOEIC Service List
+  if (s <= 3)  return 'IELTS 核心'  // AWL Sublist 1-3: highest coverage
+  if (s <= 7)  return 'IELTS 重要'  // AWL Sublist 4-7
+  if (s <= 10) return '學術詞彙'    // AWL Sublist 8-10
+  if (s === 11) return '學術詞彙'   // NAWL
+  return '商業英文'                  // TSL: TOEIC business vocab
 })
 
 const awlBadgeTitle = computed(() => {

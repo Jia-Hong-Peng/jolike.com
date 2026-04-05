@@ -56,12 +56,14 @@ export function getKnownWords() {
 
 /**
  * Schedule a card for review starting tomorrow.
- * Called when user marks a card 'unsure' during learning.
+ * Called whenever a user advances past a learning card (mark known or skip).
+ * Only creates a new entry — never overwrites existing SRS progress.
  * @param {Object} card — full learning card object from nlp.js
  */
 export function scheduleReview(card) {
   const key = wordKey(card.keyword)
   const existing = readEntry(key)
+  if (existing) return  // never reset interval or reviews for in-progress words
   writeEntry(key, {
     word: card.keyword,
     meaning_zh: card.meaning_zh ?? '',
@@ -73,7 +75,7 @@ export function scheduleReview(card) {
     clip_end: card.clip_end ?? 0,
     interval: 1,
     nextReview: Date.now() + MS_PER_DAY,
-    reviews: existing ? (existing.reviews ?? 0) : 0,
+    reviews: 0,
   })
 }
 

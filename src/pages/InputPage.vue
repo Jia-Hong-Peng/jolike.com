@@ -134,6 +134,27 @@
       </div>
     </teleport>
 
+    <!-- Try with example video -->
+    <div v-if="recentVideos.length === 0" class="w-full max-w-sm mt-8">
+      <p class="text-gray-500 text-xs uppercase tracking-wider mb-3 px-1">沒有影片可以貼？試試這個</p>
+      <button
+        class="w-full bg-gray-900 hover:bg-gray-800 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors active:bg-gray-700 text-left"
+        @click="tryExample"
+      >
+        <img
+          src="https://img.youtube.com/vi/arj7oStGLkU/default.jpg"
+          alt="TED Talk 示範"
+          class="w-14 h-10 object-cover rounded-lg flex-shrink-0 bg-gray-800"
+          loading="lazy"
+        />
+        <div class="min-w-0 flex-1">
+          <p class="text-white text-sm font-medium truncate">TED: Do schools kill creativity?</p>
+          <p class="text-gray-500 text-xs mt-0.5">Ken Robinson · 示範影片</p>
+        </div>
+        <span class="text-blue-400 text-xs flex-shrink-0">試試看 →</span>
+      </button>
+    </div>
+
     <!-- Bottom links -->
     <div class="mt-8 flex flex-col items-center gap-3">
       <a
@@ -159,7 +180,8 @@ import { analyzeVideo, getErrorMessage } from '@/services/api.js'
 const url = ref('')
 const loading = ref(false)
 const errorCode = ref(null)
-const activeMode = ref('')  // 'feed' | 'shadow'
+const activeMode = ref('')   // 'feed' | 'shadow'
+const lastMode  = ref('feed') // preserved across error for retry()
 
 const errorMessage = computed(() => {
   return errorCode.value ? getErrorMessage(errorCode.value) : ''
@@ -196,6 +218,7 @@ async function submitWithMode(mode) {
 
   loading.value = true
   activeMode.value = mode
+  lastMode.value  = mode   // save for retry()
   errorCode.value = null
 
   try {
@@ -211,6 +234,11 @@ async function submitWithMode(mode) {
 
 function retry() {
   errorCode.value = null
+  submitWithMode(lastMode.value)
+}
+
+function tryExample() {
+  url.value = 'https://www.youtube.com/watch?v=arj7oStGLkU'
   submitWithMode('feed')
 }
 

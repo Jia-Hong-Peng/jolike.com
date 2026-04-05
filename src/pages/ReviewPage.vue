@@ -71,16 +71,19 @@
           <!-- Cloze sentence: word replaced with blank -->
           <p class="text-gray-200 text-base leading-relaxed" v-html="clozeSentence"></p>
 
-          <p class="text-gray-600 text-xs mt-2">這個空格是什麼單字？</p>
+          <p class="text-gray-500 text-xs mt-2">先在腦海中想出這個單字，再點下方按鈕</p>
         </div>
 
-        <!-- Reveal button -->
-        <button
-          class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-bold text-base min-h-[56px] hover:bg-yellow-400 transition-colors"
-          @click="reveal"
-        >
-          顯示答案
-        </button>
+        <!-- Recall nudge + Reveal button -->
+        <div class="space-y-2">
+          <p class="text-center text-gray-600 text-xs">想好了嗎？</p>
+          <button
+            class="w-full bg-yellow-500 text-black py-4 rounded-2xl font-bold text-base min-h-[56px] hover:bg-yellow-400 transition-colors"
+            @click="reveal"
+          >
+            顯示答案
+          </button>
+        </div>
       </template>
 
       <!-- ── REVEALED phase: full card ── -->
