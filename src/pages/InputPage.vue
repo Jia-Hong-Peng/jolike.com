@@ -181,6 +181,13 @@
     <!-- Bottom links -->
     <div class="mt-8 flex flex-col items-center gap-3">
       <a
+        href="/vocab-study/"
+        class="text-white text-sm hover:text-blue-400 transition-colors font-semibold
+               bg-gray-900 border border-gray-700 px-5 py-2.5 rounded-2xl flex items-center gap-2"
+      >
+        📝 多益 / 雅思 / 托福 詞彙清單
+      </a>
+      <a
         href="/library/"
         class="text-gray-400 text-sm hover:text-white transition-colors font-medium"
       >

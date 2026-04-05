@@ -13,69 +13,148 @@
       <button
         class="text-gray-400 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
         @click="$emit('close')"
-      >
-        ✕
-      </button>
+      >✕</button>
     </div>
 
-    <!-- Summary row -->
-    <div class="flex gap-4 px-4 py-3 text-xs text-gray-400 border-b border-gray-800">
-      <span>共 {{ cards.length }} 張</span>
-      <span class="text-green-400">✓ {{ knownCount }} 已會</span>
-      <span class="text-gray-500">○ {{ unseenCount }} 未看</span>
+    <!-- List tabs -->
+    <div class="border-b border-gray-800 overflow-x-auto flex-shrink-0">
+      <div class="flex px-3 pt-2 pb-0 gap-1 min-w-max">
+        <!-- 本影片 tab -->
+        <button
+          class="flex-shrink-0 text-xs px-3 py-1.5 rounded-t-lg font-medium transition-colors border-b-2"
+          :class="activeTab === 'video'
+            ? 'bg-gray-800 text-white border-blue-500'
+            : 'text-gray-500 hover:text-gray-300 border-transparent'"
+          @click="activeTab = 'video'"
+        >
+          🎬 本影片
+        </button>
+        <!-- Vocab list tabs -->
+        <button
+          v-for="list in VOCAB_LISTS"
+          :key="list.id"
+          class="flex-shrink-0 text-xs px-3 py-1.5 rounded-t-lg font-medium transition-colors border-b-2"
+          :class="activeTab === list.id
+            ? 'bg-gray-800 text-white border-blue-500'
+            : 'text-gray-500 hover:text-gray-300 border-transparent'"
+          @click="switchTab(list.id)"
+        >
+          {{ list.emoji }} {{ list.label.split(' ')[0] }}
+        </button>
+      </div>
     </div>
 
-    <!-- Card list -->
-    <ul class="flex-1 overflow-y-auto divide-y divide-gray-800">
-      <li
-        v-for="(card, index) in cards"
-        :key="card.id"
-        class="flex items-center gap-3 px-4 py-3 min-h-[52px] cursor-pointer transition-colors"
-        :class="[
-          index === currentIndex ? 'bg-blue-900/40 vocab-list-active' : 'hover:bg-gray-800'
-        ]"
-        @click="onJump(index)"
-      >
-        <!-- Status indicator -->
-        <span class="text-base w-5 flex-shrink-0 text-center" :title="statusLabel(card.id)">
-          {{ statusIcon(card.id) }}
-        </span>
+    <!-- ── 本影片 content ────────────────────────────────────────────────── -->
+    <template v-if="activeTab === 'video'">
+      <!-- Summary row -->
+      <div class="flex gap-4 px-4 py-3 text-xs text-gray-400 border-b border-gray-800">
+        <span>共 {{ cards.length }} 張</span>
+        <span class="text-green-400">✓ {{ knownCount }} 已會</span>
+        <span class="text-gray-500">○ {{ unseenCount }} 未看</span>
+      </div>
 
-        <!-- Type badge -->
-        <span
-          class="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
-          :class="typeBadgeClass(card.type)"
+      <ul class="flex-1 overflow-y-auto divide-y divide-gray-800">
+        <li
+          v-for="(card, index) in cards"
+          :key="card.id"
+          class="flex items-center gap-3 px-4 py-3 min-h-[52px] cursor-pointer transition-colors"
+          :class="[
+            index === currentIndex ? 'bg-blue-900/40 vocab-list-active' : 'hover:bg-gray-800'
+          ]"
+          @click="onJump(index)"
         >
-          {{ typeLabel(card.type) }}
-        </span>
+          <span class="text-base w-5 flex-shrink-0 text-center" :title="statusLabel(card.id)">
+            {{ statusIcon(card.id) }}
+          </span>
+          <span
+            class="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
+            :class="typeBadgeClass(card.type)"
+          >{{ typeLabel(card.type) }}</span>
+          <span
+            class="text-white text-sm font-medium truncate flex-1"
+            :class="{ 'text-blue-300': index === currentIndex }"
+          >{{ card.keyword }}</span>
+          <span class="text-gray-500 text-xs truncate max-w-[60px] flex-shrink-0">
+            {{ card.meaning_zh }}
+          </span>
+        </li>
+      </ul>
+    </template>
 
-        <!-- Keyword -->
-        <span
-          class="text-white text-sm font-medium truncate flex-1"
-          :class="{ 'text-blue-300': index === currentIndex }"
+    <!-- ── Vocab list content ────────────────────────────────────────────── -->
+    <template v-else>
+      <!-- Summary row -->
+      <div class="flex gap-3 px-4 py-2.5 text-xs text-gray-400 border-b border-gray-800 items-center">
+        <span v-if="listLoading" class="animate-spin text-gray-600">⟳</span>
+        <span v-else>{{ vocabWords.length }} 個詞</span>
+        <span v-if="vocabLearnedCount > 0" class="text-teal-400">已學 {{ vocabLearnedCount }}</span>
+        <span v-if="vocabMasteredCount > 0" class="text-yellow-400">精通 {{ vocabMasteredCount }}</span>
+      </div>
+
+      <!-- Loading skeleton -->
+      <div v-if="listLoading" class="flex-1 flex flex-col items-center justify-center gap-2 p-4">
+        <div v-for="i in 5" :key="i" class="w-full h-10 bg-gray-800 rounded-xl animate-pulse"></div>
+      </div>
+
+      <!-- Word list -->
+      <ul v-else class="flex-1 overflow-y-auto divide-y divide-gray-800">
+        <li
+          v-for="word in vocabWords"
+          :key="word.word"
+          class="flex items-center gap-3 px-4 py-2.5 min-h-[44px]"
         >
-          {{ card.keyword }}
-        </span>
+          <!-- SRS status icon -->
+          <span class="text-sm w-5 flex-shrink-0 text-center">
+            {{ srsStatusIcon(word.status) }}
+          </span>
+          <!-- Word -->
+          <span class="text-white text-sm font-medium flex-1 truncate">{{ word.word }}</span>
+          <!-- Meaning -->
+          <span class="text-gray-600 text-xs truncate max-w-[64px] flex-shrink-0">{{ word.meaning }}</span>
+          <!-- SRS label -->
+          <span
+            v-if="word.status !== 'new'"
+            class="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
+            :class="{
+              'bg-blue-900/60 text-blue-400': word.status === 'learning',
+              'bg-teal-900/60 text-teal-400': word.status === 'familiar',
+              'bg-yellow-900/60 text-yellow-400': word.status === 'mastered',
+            }"
+          >{{ { learning: '學習中', familiar: '熟悉', mastered: '精通' }[word.status] }}</span>
+        </li>
+      </ul>
 
-        <!-- Meaning -->
-        <span class="text-gray-500 text-xs truncate max-w-[60px] flex-shrink-0">
-          {{ card.meaning_zh }}
-        </span>
-      </li>
-    </ul>
+      <!-- Study this list button -->
+      <div class="p-4 border-t border-gray-800 flex-shrink-0">
+        <button
+          class="w-full py-3.5 rounded-2xl font-semibold text-sm min-h-[52px] transition-colors
+                 bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center gap-2"
+          @click="studyList"
+        >
+          <span>📝</span>
+          <span>學習此清單</span>
+          <span class="text-blue-300 text-xs">({{ activeListMeta?.label }})</span>
+        </button>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { VOCAB_LISTS, loadWordList, getSrsStatus } from '@/lib/vocabLists.js'
+import { lookupMeaning } from '@/lib/lookup.js'
 
 const props = defineProps({
-  cards: { type: Array, required: true },
-  currentIndex: { type: Number, required: true },
-  cardStatus: { type: Function, required: true },
+  cards:        { type: Array,    required: true },
+  currentIndex: { type: Number,   required: true },
+  cardStatus:   { type: Function, required: true },
 })
 
 const emit = defineEmits(['close', 'jump'])
+
+// ── Tab state ─────────────────────────────────────────────────────────────────
+const activeTab = ref('video')
 
 onMounted(() => {
   nextTick(() => {
@@ -84,7 +163,8 @@ onMounted(() => {
   })
 })
 
-const knownCount = computed(() => props.cards.filter(c => props.cardStatus(c.id) === 'known').length)
+// ── 本影片 helpers ────────────────────────────────────────────────────────────
+const knownCount  = computed(() => props.cards.filter(c => props.cardStatus(c.id) === 'known').length)
 const unseenCount = computed(() => props.cards.filter(c => !props.cardStatus(c.id)).length)
 
 function statusIcon(cardId) {
@@ -116,5 +196,49 @@ function typeBadgeClass(type) {
 function onJump(index) {
   emit('jump', index)
   emit('close')
+}
+
+// ── Vocab list tab ─────────────────────────────────────────────────────────────
+const listLoading = ref(false)
+const vocabWords  = ref([])  // [{ word, meaning, status }]
+
+const activeListMeta = computed(() => VOCAB_LISTS.find(l => l.id === activeTab.value) ?? null)
+
+const vocabLearnedCount  = computed(() => vocabWords.value.filter(w => w.status !== 'new').length)
+const vocabMasteredCount = computed(() => vocabWords.value.filter(w => w.status === 'mastered').length)
+
+async function switchTab(listId) {
+  activeTab.value = listId
+  await loadVocabList(listId)
+}
+
+async function loadVocabList(listId) {
+  listLoading.value = true
+  vocabWords.value = []
+  try {
+    const words = await loadWordList(listId)
+    const STATUS_ORDER = { new: 0, learning: 1, familiar: 2, mastered: 3 }
+    vocabWords.value = words
+      .map(word => ({
+        word,
+        meaning: lookupMeaning(word),
+        status: getSrsStatus(word),
+      }))
+      .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
+  } finally {
+    listLoading.value = false
+  }
+}
+
+function srsStatusIcon(status) {
+  if (status === 'mastered') return '🏆'
+  if (status === 'familiar') return '✅'
+  if (status === 'learning') return '📚'
+  return '○'
+}
+
+function studyList() {
+  if (!activeListMeta.value) return
+  window.location.href = `/vocab-study/?list=${activeListMeta.value.id}`
 }
 </script>
