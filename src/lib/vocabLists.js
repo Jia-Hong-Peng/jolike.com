@@ -4,13 +4,10 @@
  * Lists are derived from existing data files:
  *   toeic_vocab.json  — TOEIC business vocabulary
  *   awl_nawl.json     — Academic Word List sublists 1-12
- *
- * IELTS / TOEFL mappings use AWL sublist ranges, which are validated against
- * published research (SAGE Open 2022, Browne & Culligan 2021):
- *   AWL 1-5  ≈ TOEFL core academic vocabulary
- *   AWL 1-7  ≈ IELTS band 6-7 academic vocabulary
- *   AWL 1-10 = complete Academic Word List
- *   AWL 11-12 = New Academic Word List (modern corpus additions)
+ *   cefr_vocab.json   — CEFR A1-C2 tiers
+ *   ngsl_defs.json    — New General Service List
+ *   coca5000.json     — COCA high-frequency words
+ *   opal_phrases.json — Oxford Phrasal Academic Lexicon
  */
 
 import { canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, getVocabCategories } from '@/lib/lookup.js'
@@ -18,6 +15,49 @@ import { canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, getVocabC
 const SRS_PREFIX = 'jolike_srs_'
 
 export const VOCAB_LISTS = [
+  // ── General / frequency ──────────────────────────────────────────────────
+  {
+    id: 'ngsl',
+    label: 'NGSL 通用',
+    emoji: '📖',
+    desc: '通用英語核心詞彙 (New General Service List, 4054 詞)',
+    color: 'green',
+    badgeClass: 'bg-green-900/60 text-green-300 border border-green-700',
+  },
+  {
+    id: 'coca',
+    label: 'COCA 高頻',
+    emoji: '📊',
+    desc: '美式英語高頻詞彙 (COCA 5000)',
+    color: 'orange',
+    badgeClass: 'bg-orange-900/60 text-orange-300 border border-orange-700',
+  },
+  // ── CEFR levels ──────────────────────────────────────────────────────────
+  {
+    id: 'cefr_a',
+    label: 'A1/A2 基礎',
+    emoji: '🔰',
+    desc: 'CEFR A1/A2 初學者基礎詞彙',
+    color: 'lime',
+    badgeClass: 'bg-lime-900/60 text-lime-300 border border-lime-700',
+  },
+  {
+    id: 'cefr_b1',
+    label: 'B1 中級',
+    emoji: '📗',
+    desc: 'CEFR B1 中級獨立使用者詞彙',
+    color: 'cyan',
+    badgeClass: 'bg-cyan-900/60 text-cyan-300 border border-cyan-700',
+  },
+  {
+    id: 'cefr_c1',
+    label: 'C1 高級',
+    emoji: '💎',
+    desc: 'CEFR C1 高級精通使用者詞彙',
+    color: 'purple',
+    badgeClass: 'bg-purple-900/60 text-purple-300 border border-purple-700',
+  },
+  // ── Exams ─────────────────────────────────────────────────────────────────
   {
     id: 'toeic',
     label: '多益 TOEIC',
@@ -30,7 +70,7 @@ export const VOCAB_LISTS = [
     id: 'ielts',
     label: '雅思 IELTS',
     emoji: '🎓',
-    desc: 'IELTS 學術核心詞彙 (AWL Sublist 1-7)',
+    desc: 'IELTS 學術核心詞彙 (CEFR B2)',
     color: 'sky',
     badgeClass: 'bg-sky-900/60 text-sky-300 border border-sky-700',
   },
@@ -42,6 +82,7 @@ export const VOCAB_LISTS = [
     color: 'amber',
     badgeClass: 'bg-amber-900/60 text-amber-300 border border-amber-700',
   },
+  // ── Academic ──────────────────────────────────────────────────────────────
   {
     id: 'academic',
     label: '學術詞彙 AWL',
@@ -57,6 +98,14 @@ export const VOCAB_LISTS = [
     desc: '進階學術詞彙 (NAWL Sublist 11-12)',
     color: 'violet',
     badgeClass: 'bg-violet-900/60 text-violet-300 border border-violet-700',
+  },
+  {
+    id: 'opal',
+    label: 'OPAL 片語',
+    emoji: '🗣️',
+    desc: '學術英語慣用片語 (Oxford Phrasal Academic Lexicon, 572 組)',
+    color: 'rose',
+    badgeClass: 'bg-rose-900/60 text-rose-300 border border-rose-700',
   },
 ]
 
@@ -86,18 +135,43 @@ export function getSrsStatus(word) {
  * @returns {Promise<string[]>}
  */
 export async function loadWordList(listId) {
+  // ── General / frequency ──────────────────────────────────────────────────
+  if (listId === 'ngsl') {
+    const { default: data } = await import('@/data/ngsl_defs.json')
+    return Object.keys(data).sort()
+  }
+  if (listId === 'coca') {
+    const { default: data } = await import('@/data/coca5000.json')
+    return Object.keys(data).sort()
+  }
+
+  // ── CEFR levels ──────────────────────────────────────────────────────────
+  if (listId === 'cefr_a' || listId === 'cefr_b1' || listId === 'cefr_c1') {
+    const { default: data } = await import('@/data/cefr_vocab.json')
+    const tier = listId === 'cefr_a' ? 1 : listId === 'cefr_b1' ? 2 : 4
+    return Object.entries(data).filter(([, t]) => t === tier).map(([w]) => w).sort()
+  }
+
+  // ── Exams ─────────────────────────────────────────────────────────────────
   if (listId === 'toeic') {
     const { default: data } = await import('@/data/toeic_vocab.json')
     return Object.keys(data).sort()
   }
 
-  const { default: data } = await import('@/data/awl_nawl.json')
-  const entries = Object.entries(data)
+  if (listId === 'ielts' || listId === 'toefl' || listId === 'academic' || listId === 'advanced') {
+    const { default: data } = await import('@/data/awl_nawl.json')
+    const entries = Object.entries(data)
+    if (listId === 'ielts')    return entries.filter(([, v]) => v <= 7).sort((a, b) => a[1] - b[1]).map(([w]) => w)
+    if (listId === 'toefl')    return entries.filter(([, v]) => v <= 5).sort((a, b) => a[1] - b[1]).map(([w]) => w)
+    if (listId === 'academic') return entries.filter(([, v]) => v <= 10).sort((a, b) => a[1] - b[1]).map(([w]) => w)
+    if (listId === 'advanced') return entries.filter(([, v]) => v >= 11).sort((a, b) => a[1] - b[1]).map(([w]) => w)
+  }
 
-  if (listId === 'ielts')    return entries.filter(([, v]) => v <= 7).sort((a, b) => a[1] - b[1]).map(([w]) => w)
-  if (listId === 'toefl')    return entries.filter(([, v]) => v <= 5).sort((a, b) => a[1] - b[1]).map(([w]) => w)
-  if (listId === 'academic') return entries.filter(([, v]) => v <= 10).sort((a, b) => a[1] - b[1]).map(([w]) => w)
-  if (listId === 'advanced') return entries.filter(([, v]) => v >= 11).sort((a, b) => a[1] - b[1]).map(([w]) => w)
+  // ── Academic phrases ──────────────────────────────────────────────────────
+  if (listId === 'opal') {
+    const { default: data } = await import('@/data/opal_phrases.json')
+    return Array.isArray(data) ? [...data].sort() : Object.keys(data).sort()
+  }
 
   return []
 }
