@@ -75,10 +75,15 @@ function morphStems(w) {
       stems.push(base.slice(0, -1))      // biggest    → big (double consonant)
     }
   }
+  if (w.endsWith('ened') && w.length > 6) stems.push(w.slice(0, -4))  // softened → soft, darkened → dark
   if (w.endsWith('ed') && w.length > 4) {
-    stems.push(w.slice(0, -2))           // started    → start
-    stems.push(w.slice(0, -1))           // moved      → move
-    stems.push(w.slice(0, -3))           // stopped    → stop (double)
+    const base2 = w.slice(0, -2)
+    stems.push(base2)                    // started    → start, softened → soften
+    stems.push(base2 + 'e')             // moved      → move  (base2 = 'mov' + 'e')
+    // Double consonant only: stopped → stopp → stop (only when last two of base are same)
+    if (base2.length >= 3 && base2[base2.length - 1] === base2[base2.length - 2]) {
+      stems.push(base2.slice(0, -1))    // stopped    → stop
+    }
   }
   if (w.endsWith('ly') && w.length > 4) stems.push(w.slice(0, -2))   // quickly → quick
   if (w.endsWith('tion') && w.length > 6) stems.push(w.slice(0, -3)) // reduction → reduc
@@ -115,6 +120,16 @@ function canonicalForm(word) {
     if (inVocab && (best === null || c.length < best.length)) best = c
   }
   if (best !== null) return best
+
+  // Heuristic for unknown -ed words (soften not in vocab, but soften is the clear base)
+  if (w.endsWith('ed') && w.length > 4) {
+    const plain = w.slice(0, -2)         // softened → soften, started → start
+    if (plain.length >= 3) {
+      // Double consonant: stopped → stopp → stop
+      if (plain[plain.length - 1] === plain[plain.length - 2]) return plain.slice(0, -1)
+      return plain
+    }
+  }
 
   // Heuristic for unknown -ing words (base form not in any vocab list)
   // chaperoning → chaperone, running → run
