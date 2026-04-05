@@ -81,6 +81,15 @@ export function useLearningSession(videoId, cards) {
   }
 
   /**
+   * Go back to the previous card.
+   */
+  function prev() {
+    if (currentIndex.value > 0) {
+      currentIndex.value--
+    }
+  }
+
+  /**
    * Jump directly to a specific card index.
    * @param {number} index
    */
@@ -94,6 +103,7 @@ export function useLearningSession(videoId, cards) {
     currentIndex,
     markCard,
     next,
+    prev,
     jumpTo,
     isComplete,
     cardStatus,

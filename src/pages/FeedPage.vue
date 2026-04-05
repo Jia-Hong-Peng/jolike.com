@@ -112,7 +112,10 @@
           <ActionBar
             :card-id="currentCard.id"
             :status="cardStatus(currentCard.id)"
+            :can-go-prev="currentIndex > 0"
             @mark="onMark"
+            @prev="onPrev"
+            @next="onNext"
           />
         </LearningCard>
 
@@ -207,6 +210,7 @@ const {
   currentIndex,
   markCard,
   next,
+  prev,
   jumpTo,
   isComplete,
   cardStatus,
@@ -269,16 +273,18 @@ function animateCardOut(callback) {
   }, 300)
 }
 
-// --- ActionBar handler (US3) ---
+// --- ActionBar handlers ---
 function onMark({ id, status }) {
-  const card = currentCard.value
-  animateCardOut(() => {
-    markCard(id, status)
-    if (status === 'unsure' && card) {
-      scheduleReview(card)
-    }
-    next()
-  })
+  markCard(id, status)
+  animateCardOut(() => next())
+}
+
+function onPrev() {
+  animateCardOut(() => prev())
+}
+
+function onNext() {
+  animateCardOut(() => next())
 }
 
 function replayCard() {
@@ -294,20 +300,19 @@ function cycleLevel() {
   level.value = LEVELS[(idx + 1) % LEVELS.length].key
 }
 
-// Keyboard navigation (desktop: ↓/→ = known, ↑/← = unsure)
+// Keyboard navigation: → = mark known + next, ← = prev, ↓ = next (skip)
 function onKeyDown(e) {
   if (!currentCard.value || isComplete.value) return
-  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+  if (e.key === 'ArrowRight') {
     e.preventDefault()
-    animateCardOut(() => { markCard(currentCard.value?.id, 'known'); next() })
-  } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+    markCard(currentCard.value?.id, 'known')
+    animateCardOut(() => next())
+  } else if (e.key === 'ArrowDown') {
     e.preventDefault()
-    const card = currentCard.value
-    animateCardOut(() => {
-      markCard(card?.id, 'unsure')
-      if (card) scheduleReview(card)
-      next()
-    })
+    animateCardOut(() => next())
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    e.preventDefault()
+    animateCardOut(() => prev())
   }
 }
 onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
