@@ -1,21 +1,28 @@
 /**
- * YouTube subtitle fetcher — watch page HTML strategy.
+ * YouTube subtitle fetcher — InnerTube ANDROID client strategy.
  *
  * Strategy:
- *   1. Fetch youtube.com/watch?v={id} with browser User-Agent
- *   2. Extract captionTracks from ytInitialPlayerResponse in the HTML
+ *   1. POST to /youtubei/v1/player with ANDROID client credentials (no PO token needed)
+ *   2. Extract captionTracks from the JSON response
  *   3. Find the English track and fetch its timedtext XML
+ *   4. Fallback: watch page HTML parsing if InnerTube returns no tracks
  *
- * Why not InnerTube API:
- *   YouTube's /youtubei/v1/player now requires a Proof-of-Origin (PO) token
- *   when called server-side, causing empty captionTracks for most videos.
- *   The watch page delivers captions without that requirement.
+ * Why ANDROID client:
+ *   The WEB InnerTube client now requires a Proof-of-Origin (PO) token server-side.
+ *   The ANDROID client uses a different auth path and returns captionTracks without
+ *   a PO token. The timedtext URLs it provides work without IP or session binding.
+ *
+ * Why not the direct timedtext API:
+ *   /api/timedtext?v=ID&lang=en returns HTTP 200 with 0 bytes for most videos
+ *   unless the full set of session parameters (ei, signature, etc.) is included.
+ *   Those parameters come from the InnerTube / watch-page response.
  */
 
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+const ANDROID_UA = 'com.google.android.youtube/20.10.38 (Linux; U; Android 14)'
+const ANDROID_CLIENT_VERSION = '20.10.38'
 
 // Headers that make the watch-page request look like a real browser navigation.
-// sec-fetch-* and sec-ch-ua are the most effective signals against bot detection.
 const WATCH_PAGE_HEADERS = {
   'User-Agent': BROWSER_UA,
   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -31,8 +38,6 @@ const WATCH_PAGE_HEADERS = {
   'sec-fetch-site': 'none',
   'sec-fetch-user': '?1',
   'Upgrade-Insecure-Requests': '1',
-  // Bypass YouTube's GDPR consent page.
-  // SOCS=CAI is the current (2024+) minimal consent cookie.
   'Cookie': 'SOCS=CAI; YSC=1; VISITOR_INFO1_LIVE=1',
 }
 
@@ -63,7 +68,78 @@ export function extractVideoId(url) {
  * @returns {Promise<{transcript: Array<{text,start,dur}>} | {error: string}>}
  */
 export async function fetchTranscript(videoId) {
-  // Step 1: fetch the watch page HTML
+  // Strategy 1: InnerTube ANDROID client (primary — works without PO token)
+  const result = await fetchTranscriptViaAndroid(videoId)
+  if (result) return result
+
+  // Strategy 2: Watch page HTML parsing (fallback)
+  return fetchTranscriptViaWatchPage(videoId)
+}
+
+// ---------------------------------------------------------------------------
+// Strategy 1: InnerTube ANDROID client
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch transcript via InnerTube ANDROID client.
+ * The ANDROID client returns captionTracks with timedtext URLs that work
+ * server-side without a PO token or IP binding.
+ * @param {string} videoId
+ * @returns {Promise<{transcript: Array<{text,start,dur}>} | null>}
+ */
+async function fetchTranscriptViaAndroid(videoId) {
+  let tracks
+  try {
+    const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': ANDROID_UA,
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'ANDROID',
+            clientVersion: ANDROID_CLIENT_VERSION,
+          },
+        },
+        videoId,
+      }),
+      signal: AbortSignal.timeout(8000),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks
+  } catch {
+    return null
+  }
+
+  if (!Array.isArray(tracks) || tracks.length === 0) return null
+
+  const captionUrl = findEnglishCaptionUrl(tracks)
+  if (!captionUrl) return null
+
+  try {
+    const res = await fetch(captionUrl, {
+      headers: { 'User-Agent': BROWSER_UA },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return null
+    const body = await res.text()
+    if (!body) return null
+    const transcript = parseCaptions(body)
+    if (transcript.length === 0) return null
+    return { transcript }
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Strategy 2: Watch page HTML parsing (fallback)
+// ---------------------------------------------------------------------------
+
+async function fetchTranscriptViaWatchPage(videoId) {
   let html
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
@@ -76,48 +152,30 @@ export async function fetchTranscript(videoId) {
     return { error: 'NETWORK_ERROR' }
   }
 
-  // Step 2: extract captionTracks from ytInitialPlayerResponse
   const tracks = extractCaptionTracks(html)
+  if (!tracks || tracks.length === 0) return { error: 'NO_CAPTIONS' }
 
-  // Step 3: pick the best English track
-  // Fallback: if watch-page extraction fails (bot detection / changed HTML structure),
-  // try the direct timedtext API which works without parsing the watch page.
-  let captionUrl
-  let captionBody  // may already be populated by the direct fallback (avoids re-fetch)
-  if (tracks && tracks.length > 0) {
-    captionUrl = findEnglishCaptionUrl(tracks)
-  }
-  if (!captionUrl) {
-    const direct = await findEnglishCaptionUrlDirect(videoId)
-    if (direct) {
-      captionUrl = direct.url
-      captionBody = direct.body  // already fetched during probing — reuse it
-    }
-  }
+  const captionUrl = findEnglishCaptionUrl(tracks)
   if (!captionUrl) return { error: 'NO_CAPTIONS' }
 
-  // Step 4: fetch the caption XML/JSON (skip if body already obtained in step 3)
-  if (!captionBody) {
-    try {
-      const res = await fetch(captionUrl, {
-        headers: { 'User-Agent': BROWSER_UA },
-        signal: AbortSignal.timeout(6000),
-      })
-      if (!res.ok) return { error: 'NO_CAPTIONS' }
-      captionBody = await res.text()
-    } catch {
-      return { error: 'NETWORK_ERROR' }
-    }
+  try {
+    const res = await fetch(captionUrl, {
+      headers: { 'User-Agent': BROWSER_UA },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return { error: 'NO_CAPTIONS' }
+    const body = await res.text()
+    if (!body) return { error: 'NO_CAPTIONS' }
+    const transcript = parseCaptions(body)
+    if (transcript.length === 0) return { error: 'NO_CAPTIONS' }
+    return { transcript }
+  } catch {
+    return { error: 'NETWORK_ERROR' }
   }
-
-  const transcript = parseCaptions(captionBody)
-  if (transcript.length === 0) return { error: 'NO_CAPTIONS' }
-
-  return { transcript }
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Shared helpers
 // ---------------------------------------------------------------------------
 
 /**
@@ -132,11 +190,9 @@ function extractCaptionTracks(html) {
   const start = html.indexOf(key)
   if (start === -1) return null
 
-  // Find the opening '[' of the array value
   const bracketStart = html.indexOf('[', start + key.length)
   if (bracketStart === -1) return null
 
-  // Walk forward counting brackets until the matching ']'
   let depth = 0
   let inString = false
   let escape = false
@@ -173,42 +229,6 @@ function findEnglishCaptionUrl(tracks) {
   for (const pred of priority) {
     const track = tracks.find(pred)
     if (track?.baseUrl) return track.baseUrl
-  }
-  return null
-}
-
-/**
- * Fallback: probe the direct timedtext API when watch-page extraction fails.
- * YouTube's timedtext endpoint accepts language code directly and doesn't require
- * parsing ytInitialPlayerResponse. Tries en, en-US, and auto-generated (kind=asr).
- * Returns { url, body } for the first working track, or null if none found.
- * The body is the already-fetched caption text so the caller avoids re-fetching.
- * @param {string} videoId
- * @returns {Promise<{ url: string, body: string } | null>}
- */
-async function findEnglishCaptionUrlDirect(videoId) {
-  const candidates = [
-    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`,
-    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=json3`,
-    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&kind=asr&fmt=json3`,
-    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&kind=asr&fmt=json3`,
-  ]
-  for (const url of candidates) {
-    try {
-      const res = await fetch(url, {
-        headers: { 'User-Agent': BROWSER_UA },
-        signal: AbortSignal.timeout(5000),
-      })
-      if (!res.ok) continue
-      const text = await res.text()
-      // Non-empty JSON with events means the track exists and has content
-      if (text && text.length > 10 && text.trimStart().startsWith('{')) {
-        const data = JSON.parse(text)
-        if (data?.events?.length > 0) return { url, body: text }
-      }
-    } catch {
-      // try next candidate
-    }
   }
   return null
 }
