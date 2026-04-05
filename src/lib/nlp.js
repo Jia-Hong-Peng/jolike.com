@@ -195,7 +195,7 @@ function awlSublist(word) {
 //   Research shows AWL covers ~10% of academic texts (Coxhead 2000).
 //   These words receive a minimum tier of 3 (B2) so they always surface
 //   at intermediate level, even if CEFR frequency marks them as B1.
-function wordDifficultyTier(word) {
+export function wordDifficultyTier(word) {
   const w = word.toLowerCase()
 
   // Direct lookup in CEFR vocabulary

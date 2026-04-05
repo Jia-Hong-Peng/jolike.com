@@ -203,7 +203,7 @@ class="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-10
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import VideoClip from '@/components/VideoClip.vue'
 import { getVideo } from '@/services/api.js'
-import { lookupMeaning } from '@/lib/nlp.js'
+import { lookupMeaning, wordDifficultyTier } from '@/lib/nlp.js'
 import { scheduleReview, getKnownWords } from '@/composables/useSRS.js'
 
 const CLIP_START_PREBUFFER = 0.3  // seek slightly early to absorb seekTo latency
@@ -378,7 +378,7 @@ function tapWord(word) {
       keyword:         word,
       meaning_zh:      meaning || '—',
       frequency:       1,
-      difficulty_tier: 2,
+      difficulty_tier: wordDifficultyTier(word),
       sentence:        seg?.text ?? '',
       clip_start,
       clip_end,

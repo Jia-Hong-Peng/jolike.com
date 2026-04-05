@@ -22,7 +22,6 @@
     <div class="flex gap-4 px-4 py-3 text-xs text-gray-400 border-b border-gray-800">
       <span>共 {{ cards.length }} 張</span>
       <span class="text-green-400">✓ {{ knownCount }} 已會</span>
-      <span class="text-yellow-400">? {{ unsureCount }} 不熟</span>
       <span class="text-gray-500">○ {{ unseenCount }} 未看</span>
     </div>
 
@@ -79,7 +78,6 @@ const props = defineProps({
 const emit = defineEmits(['close', 'jump'])
 
 const knownCount = computed(() => props.cards.filter(c => props.cardStatus(c.id) === 'known').length)
-const unsureCount = computed(() => props.cards.filter(c => props.cardStatus(c.id) === 'unsure').length)
 const unseenCount = computed(() => props.cards.filter(c => !props.cardStatus(c.id)).length)
 
 function statusIcon(cardId) {

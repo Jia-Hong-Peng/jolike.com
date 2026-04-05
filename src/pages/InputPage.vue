@@ -1,5 +1,20 @@
 <template>
   <div class="min-h-screen bg-black flex flex-col items-center justify-center px-6">
+    <!-- Due-review banner -->
+    <div
+      v-if="dueCount > 0"
+      class="w-full max-w-sm mb-6 bg-yellow-900/60 border border-yellow-700 rounded-2xl px-4 py-3
+             flex items-center gap-3 cursor-pointer hover:bg-yellow-900/80 transition-colors"
+      @click="() => (window.location.href = '/review/')"
+    >
+      <span class="text-xl flex-shrink-0">🔔</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-yellow-300 font-semibold text-sm">今日有 {{ dueCount }} 個單字待複習</p>
+        <p class="text-yellow-500 text-xs mt-0.5">點此開始複習，鞏固記憶</p>
+      </div>
+      <span class="text-yellow-500 text-sm flex-shrink-0">→</span>
+    </div>
+
     <!-- Logo / Header -->
     <div class="mb-10 text-center">
       <h1 class="text-3xl font-bold text-white tracking-tight">JoLike English</h1>
@@ -176,12 +191,14 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { analyzeVideo, getErrorMessage } from '@/services/api.js'
+import { getDue } from '@/composables/useSRS.js'
 
 const url = ref('')
 const loading = ref(false)
 const errorCode = ref(null)
 const activeMode = ref('')   // 'feed' | 'shadow'
 const lastMode  = ref('feed') // preserved across error for retry()
+const dueCount = computed(() => getDue().length)
 
 const errorMessage = computed(() => {
   return errorCode.value ? getErrorMessage(errorCode.value) : ''

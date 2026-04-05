@@ -90,7 +90,13 @@
           <p class="text-white text-xs font-medium leading-snug line-clamp-2">
             {{ video.title || video.id }}
           </p>
-          <p class="text-gray-600 text-xs mt-1">{{ formatDate(video.analyzed_at) }}</p>
+          <div class="flex items-center gap-2 mt-1">
+            <p class="text-gray-600 text-xs">{{ formatDate(video.analyzed_at) }}</p>
+            <span
+              v-if="learnedCount(video.id) > 0"
+              class="text-xs text-teal-400 font-medium"
+            >已學 {{ learnedCount(video.id) }} 詞</span>
+          </div>
         </div>
       </div>
     </div>
@@ -192,6 +198,21 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getLibrary, deleteLibraryVideo } from '@/services/api.js'
+
+const SRS_PREFIX = 'jolike_srs_'
+
+function learnedCount(videoId) {
+  let count = 0
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i)
+    if (!k?.startsWith(SRS_PREFIX)) continue
+    try {
+      const entry = JSON.parse(localStorage.getItem(k) || '{}')
+      if (entry.videoId === videoId) count++
+    } catch { /* skip */ }
+  }
+  return count
+}
 
 const ADMIN_KEY = 'jolike_admin_token'
 const PAGE_SIZE = 50
