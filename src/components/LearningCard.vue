@@ -117,7 +117,6 @@ import VideoClip from './VideoClip.vue'
 import HighlightedSentence from './HighlightedSentence.vue'
 import { lookupDefinition } from '@/composables/useDictionary.js'
 import { useTTS } from '@/composables/useTTS.js'
-import { getVocabCategories } from '@/lib/lookup.js'
 
 const props = defineProps({
   card: {
@@ -318,10 +317,9 @@ const awlBadgeClass = computed(() => {
   return 'bg-cyan-900/60 text-cyan-300 border border-cyan-700'                    // TSL: cyan = business/TOEIC
 })
 
-// TOEIC badge: show only when word is in toeic_vocab and NOT already covered by AWL badge (TSL sublist ≥12)
+// TOEIC badge: card.categories is set by nlp.js during analysis (avoids re-importing lookup.js here)
 const showToeicBadge = computed(() => {
   if ((props.card.awl_sublist ?? 0) >= 12) return false  // already shown as 商業英文 via AWL badge
-  const cats = getVocabCategories(props.card.lemma || props.card.keyword)
-  return cats.includes('toeic')
+  return (props.card.categories ?? []).includes('toeic')
 })
 </script>
