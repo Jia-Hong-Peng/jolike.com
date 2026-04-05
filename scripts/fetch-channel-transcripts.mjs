@@ -41,31 +41,60 @@ if (!SECRET) {
 
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
-async function fetchTranscriptForVideo(videoId) {
+async function fetchTranscriptForVideo(videoId, { maxRetries = 3 } = {}) {
   // Fetch YouTube watch page — works from GitHub IPs, not from Cloudflare datacenter IPs
   let html
-  try {
-    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Cookie': 'SOCS=CAI; CONSENT=YES+cb; PREF=hl=en&gl=US',
-      },
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!res.ok) return null
-    html = await res.text()
-  } catch {
-    return null
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: {
+          'User-Agent': BROWSER_UA,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cookie': 'SOCS=CAI; CONSENT=YES+cb; PREF=hl=en&gl=US',
+        },
+        signal: AbortSignal.timeout(10000),
+      })
+      if (res.status === 429) {
+        const retryAfter = parseInt(res.headers.get('Retry-After') || '0', 10)
+        const backoff = retryAfter > 0 ? retryAfter * 1000 : Math.min(30000, 5000 * Math.pow(2, attempt))
+        process.stdout.write(`[429 attempt=${attempt+1}/${maxRetries+1} wait=${Math.round(backoff/1000)}s] `)
+        if (attempt < maxRetries) {
+          await sleep(backoff)
+          continue
+        }
+        return { error: 'RATE_LIMITED' }
+      }
+      if (!res.ok) {
+        process.stdout.write(`[http=${res.status}] `)
+        return { error: 'HTTP_ERROR', status: res.status }
+      }
+      html = await res.text()
+      break
+    } catch (err) {
+      process.stdout.write(`[fetch_err: ${err.message?.substring(0, 30)}] `)
+      if (attempt < maxRetries) {
+        await sleep(3000 * (attempt + 1))
+        continue
+      }
+      return { error: 'FETCH_ERROR' }
+    }
   }
 
   // Extract captionTracks from ytInitialPlayerResponse
   const tracks = extractCaptionTracks(html)
-  if (!tracks || tracks.length === 0) return null
+  if (!tracks || tracks.length === 0) {
+    // Log HTML length to help diagnose stripped/bot-detection pages
+    process.stdout.write(`[html=${html.length}b no_tracks] `)
+    return { error: 'NO_CAPTIONS' }
+  }
 
   const captionUrl = findEnglishCaptionUrl(tracks)
-  if (!captionUrl) return null
+  if (!captionUrl) {
+    const langs = tracks.map(t => t.languageCode).join(',')
+    process.stdout.write(`[tracks=${tracks.length} langs=${langs} no_en] `)
+    return { error: 'NO_ENGLISH' }
+  }
 
   // Fetch the timedtext
   try {
@@ -73,19 +102,23 @@ async function fetchTranscriptForVideo(videoId) {
       headers: { 'User-Agent': BROWSER_UA },
       signal: AbortSignal.timeout(8000),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      process.stdout.write(`[timedtext=${res.status}] `)
+      return { error: 'TIMEDTEXT_ERROR' }
+    }
     const body = await res.text()
-    if (!body) return null
+    if (!body) return { error: 'EMPTY_TIMEDTEXT' }
     const transcript = parseCaptions(body)
-    if (transcript.length === 0) return null
+    if (transcript.length === 0) return { error: 'EMPTY_PARSE' }
 
     // Extract title and duration from ytInitialPlayerResponse
     const title = extractTitle(html)
     const duration = extractDuration(html)
 
     return { transcript, title, duration_seconds: duration }
-  } catch {
-    return null
+  } catch (err) {
+    process.stdout.write(`[timedtext_err: ${err.message?.substring(0,30)}] `)
+    return { error: 'TIMEDTEXT_FETCH_ERROR' }
   }
 }
 
@@ -239,16 +272,37 @@ async function main() {
     const stubs = await getStubs(channel.id, LIMIT)
     console.log(`   ${stubs.length} stubs to process`)
 
-    let success = 0, noCaptions = 0, errors = 0
+    let success = 0, noCaptions = 0, rateLimited = 0, errors = 0
+    let consecutiveRateLimits = 0
 
     for (const v of stubs) {
-      process.stdout.write(`   [${success+noCaptions+errors+1}/${stubs.length}] ${v.title?.substring(0,60) || v.id} ... `)
+      const idx = success + noCaptions + rateLimited + errors + 1
+      process.stdout.write(`   [${idx}/${stubs.length}] ${v.title?.substring(0,60) || v.id} ... `)
 
       const result = await fetchTranscriptForVideo(v.id)
-      if (!result) {
-        process.stdout.write('no captions\n')
-        noCaptions++
+
+      if (!result || result.error) {
+        const errCode = result?.error || 'UNKNOWN'
+        if (errCode === 'RATE_LIMITED') {
+          process.stdout.write('rate_limited\n')
+          rateLimited++
+          consecutiveRateLimits++
+          // After 5 consecutive rate limits, stop processing this channel
+          if (consecutiveRateLimits >= 5) {
+            console.log(`   ⚠ 5 consecutive rate limits — stopping channel early`)
+            break
+          }
+        } else if (errCode === 'NO_CAPTIONS' || errCode === 'NO_ENGLISH') {
+          process.stdout.write(`${errCode.toLowerCase()}\n`)
+          noCaptions++
+          consecutiveRateLimits = 0
+        } else {
+          process.stdout.write(`error: ${errCode}\n`)
+          errors++
+          consecutiveRateLimits = 0
+        }
       } else {
+        consecutiveRateLimits = 0
         const saved = await saveTranscript(v.id, result.title || v.title, result.duration_seconds, result.transcript)
         if (saved) {
           process.stdout.write(`ok (${result.transcript.length} segments)\n`)
@@ -262,7 +316,7 @@ async function main() {
       await sleep(DELAY_MS + Math.random() * 800)
     }
 
-    console.log(`   ✓ done: ${success} saved, ${noCaptions} no captions, ${errors} errors`)
+    console.log(`   ✓ done: ${success} saved, ${noCaptions} no captions, ${rateLimited} rate_limited, ${errors} errors`)
   }
 }
 
