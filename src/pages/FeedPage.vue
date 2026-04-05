@@ -150,6 +150,14 @@
 
         <!-- Progress + level indicator (top-left) -->
         <div class="absolute top-4 left-4 z-20 flex items-center gap-2">
+          <button
+            class="bg-black/50 backdrop-blur-sm text-gray-300 text-xs px-3 py-2 rounded-full border border-white/20
+                   hover:bg-black/70 transition-colors min-h-[32px]"
+            title="回首頁"
+            @click="() => (window.location.href = '/')"
+          >
+            ←
+          </button>
           <div class="bg-black/50 backdrop-blur-sm text-gray-300 text-xs px-3 py-2 rounded-full border border-white/20">
             {{ currentIndex + 1 }} / {{ cards.length }}
           </div>
