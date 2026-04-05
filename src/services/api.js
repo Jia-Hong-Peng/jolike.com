@@ -223,7 +223,7 @@ export function getErrorMessage(errorCode) {
   const messages = {
     INVALID_URL: '請輸入 YouTube 連結',
     NO_CAPTIONS: '此影片不含英文字幕，請換一支影片',
-    TRANSCRIPT_PENDING: '字幕正在後台處理中，請稍後再試',
+    TRANSCRIPT_PENDING: '字幕準備中，請稍候 1-2 分鐘再試',
     ANALYSIS_FAILED: '分析失敗，請稍後再試',
     NETWORK_ERROR: '請確認網路連線',
     NOT_FOUND: '找不到影片資料，請重新輸入',

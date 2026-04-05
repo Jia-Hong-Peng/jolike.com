@@ -84,7 +84,7 @@ export async function onRequestPost(context) {
     // If it's a stub, Cloudflare IPs may be blocked by YouTube — auto-trigger GitHub Actions.
     if (isStub) {
       triggerGithubFetch(env, cached.channel_id).catch(() => {})
-      return jsonError(422, 'TRANSCRIPT_PENDING', '字幕抓取中，約 1-2 分鐘後重試即可開啟')
+      return jsonError(422, 'TRANSCRIPT_PENDING', '字幕準備中，請稍候 1-2 分鐘再試')
     }
     return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
   }
