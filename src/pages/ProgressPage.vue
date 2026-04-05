@@ -341,6 +341,7 @@ const filters = computed(() => [
   { key: 'academic',         label: `學術 (${categoryCount('academic')})` },
   { key: 'advanced_academic',label: `進階學術 (${categoryCount('advanced_academic')})` },
   { key: 'toeic',            label: `多益 (${categoryCount('toeic')})` },
+  { key: 'ielts',            label: `雅思 (${categoryCount('ielts')})` },
 ])
 
 const filteredWords = computed(() => {
@@ -351,7 +352,7 @@ const filteredWords = computed(() => {
     .filter(e => {
       if (cat === 'due')               return e.nextReview <= now
       if (cat === 'mastered')          return e.interval > 30
-      if (cat === 'academic' || cat === 'advanced_academic' || cat === 'toeic')
+      if (['academic', 'advanced_academic', 'toeic', 'ielts'].includes(cat))
                                        return (e.categories || []).includes(cat)
       return true
     })
@@ -473,7 +474,7 @@ function showImportMsg(msg, error) {
 }
 
 function categoryLabel(cat) {
-  return { academic: '學術', advanced_academic: '進階學術', toeic: '多益' }[cat] ?? cat
+  return { academic: '學術', advanced_academic: '進階學術', toeic: '多益', ielts: '雅思' }[cat] ?? cat
 }
 
 function categoryBadgeClass(cat) {
@@ -481,6 +482,7 @@ function categoryBadgeClass(cat) {
     academic:          'bg-indigo-900/60 text-indigo-300',
     advanced_academic: 'bg-violet-900/60 text-violet-300',
     toeic:             'bg-emerald-900/60 text-emerald-300',
+    ielts:             'bg-sky-900/60 text-sky-300',
   }[cat] ?? 'bg-gray-700 text-gray-400'
 }
 

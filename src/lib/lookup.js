@@ -28,6 +28,8 @@ const cefrMap    = cefrVocab
 const awlNawlMap = awlNawlData
 const awlSet     = new Set(awlWords.map(w => w.toLowerCase()))
 const toeicSet   = new Set(Object.keys(toeicVocab).map(w => w.toLowerCase()))
+// IELTS: CEFR B2 (tier 3) upper-intermediate vocabulary
+const ieltsSet   = new Set(Object.entries(cefrVocab).filter(([, t]) => t === 3).map(([w]) => w))
 
 // ── Morphological stem generation ─────────────────────────────────────────────
 export function morphStems(w) {
@@ -118,7 +120,7 @@ export function awlSublist(word) {
 
 // ── Vocabulary category tags ──────────────────────────────────────────────────
 // Returns array of category strings for a word.
-// Categories: 'academic' (AWL 1-10), 'advanced_academic' (AWL 11-12), 'toeic'
+// Categories: 'academic' (AWL 1-10), 'advanced_academic' (AWL 11-12), 'toeic', 'ielts' (CEFR B2)
 export function getVocabCategories(word) {
   const w = word.toLowerCase()
   const cats = []
@@ -132,6 +134,11 @@ export function getVocabCategories(word) {
   const inToeic = toeicSet.has(w)
     || morphStems(w).some(s => toeicSet.has(s))
   if (inToeic) cats.push('toeic')
+
+  // IELTS: CEFR B2 upper-intermediate vocabulary (band 6-7 target range)
+  const inIelts = ieltsSet.has(w)
+    || morphStems(w).some(s => ieltsSet.has(s))
+  if (inIelts) cats.push('ielts')
 
   return cats
 }
