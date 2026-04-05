@@ -94,6 +94,7 @@
           >
             顯示答案
           </button>
+          <p class="text-center text-gray-800 text-xs">Space 或 Enter 鍵也可顯示</p>
         </div>
       </template>
 
@@ -111,16 +112,21 @@
 
         <!-- Card info -->
         <div class="bg-gray-900 rounded-2xl px-6 py-5 space-y-2">
-          <!-- Keyword + TTS -->
-          <div class="flex items-center gap-3">
+          <!-- Keyword + lemma + TTS -->
+          <div class="flex items-center gap-3 flex-wrap">
             <p class="text-2xl font-bold text-white leading-tight">
               <mark class="bg-yellow-400 text-black px-1 rounded">{{ currentEntry.word }}</mark>
             </p>
+            <span
+              v-if="currentEntry.lemma"
+              class="text-sm text-gray-400 font-normal"
+              :title="`原型: ${currentEntry.lemma}`"
+            >← {{ currentEntry.lemma }}</span>
             <button
               v-if="hasTTS"
               class="flex items-center justify-center w-11 h-11 min-h-[44px] min-w-[44px] bg-gray-700 text-gray-300 rounded-full hover:bg-gray-600 transition-colors"
               title="朗讀單字"
-              @click="speak(currentEntry.word)"
+              @click="speak(currentEntry.lemma || currentEntry.word)"
             >
               🔊
             </button>
@@ -157,16 +163,18 @@
         <!-- Action buttons -->
         <div class="flex gap-3">
           <button
-            class="flex-1 bg-red-900/70 text-red-300 py-4 rounded-2xl font-semibold text-base min-h-[56px] border border-red-800 hover:bg-red-900 transition-colors"
+            class="flex-1 bg-red-900/70 text-red-300 py-4 rounded-2xl font-semibold text-base min-h-[56px] border border-red-800 hover:bg-red-900 transition-colors flex flex-col items-center gap-0.5"
             @click="mark('unsure')"
           >
-            還不熟 😅
+            <span>還不熟 😅</span>
+            <span class="text-red-500 text-xs font-normal">→ 1 天後</span>
           </button>
           <button
-            class="flex-1 bg-green-900/70 text-green-300 py-4 rounded-2xl font-semibold text-base min-h-[56px] border border-green-800 hover:bg-green-900 transition-colors"
+            class="flex-1 bg-green-900/70 text-green-300 py-4 rounded-2xl font-semibold text-base min-h-[56px] border border-green-800 hover:bg-green-900 transition-colors flex flex-col items-center gap-0.5"
             @click="mark('known')"
           >
-            記住了 ✓
+            <span>記住了 ✓</span>
+            <span class="text-green-600 text-xs font-normal">→ {{ intervalLabel(nextKnownInterval) }}</span>
           </button>
         </div>
       </template>
@@ -175,7 +183,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import VideoClip from '@/components/VideoClip.vue'
 import { getDue, markReview } from '@/composables/useSRS.js'
 import { subscribePush, isPushEnabled } from '@/composables/usePWA.js'
@@ -244,6 +252,17 @@ const typeBadgeClass = computed(() => ({
   pattern: 'bg-green-900 text-green-300',
 })[currentEntry.value?.type] ?? 'bg-gray-800 text-gray-300')
 
+// Next interval previews shown on action buttons
+const nextKnownInterval = computed(() => {
+  const iv = currentEntry.value?.interval ?? 1
+  return Math.min(Math.ceil(iv * 2.5), 90)
+})
+
+function intervalLabel(days) {
+  if (days >= 30) return `${Math.round(days / 30)} 個月後`
+  return `${days} 天後`
+}
+
 // ── Actions ───────────────────────────────────────────────────────────────────
 function speak(word) {
   if (!hasTTS.value) return
@@ -292,4 +311,28 @@ function dismissPush() {
 function goHome() {
   window.location.href = '/'
 }
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+// Space / Enter → reveal answer; ← / 1 → unsure; → / 2 → known
+function onKeyDown(e) {
+  if (sessionComplete.value || loading.value) return
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return
+  if (phase.value === 'question') {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault()
+      reveal()
+    }
+  } else {
+    if (e.key === 'ArrowLeft' || e.key === '1') {
+      e.preventDefault()
+      mark('unsure')
+    } else if (e.key === 'ArrowRight' || e.key === '2') {
+      e.preventDefault()
+      mark('known')
+    }
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeyDown))
+onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 </script>
