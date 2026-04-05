@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractLearningItems, lookupMeaning, wordDifficultyTier } from '../src/lib/nlp.js'
+import { extractLearningItems, lookupMeaning, wordDifficultyTier, extractWordsFromSegment } from '../src/lib/nlp.js'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const makeTranscript = (texts) => texts.map((text, i) => ({ text, start: i * 3, dur: 3 }))
@@ -467,5 +467,54 @@ describe('nlp.js — wordDifficultyTier', () => {
       const t = wordDifficultyTier(word)
       expect([1, 2, 3, 4]).toContain(t)
     }
+  })
+})
+
+// ── extractWordsFromSegment ────────────────────────────────────────────────────
+describe('nlp.js — extractWordsFromSegment', () => {
+  const seg = (text, start = 0, dur = 3) => ({ text, start, dur })
+
+  it('T-EWS-1 — returns empty array for empty/null segment', () => {
+    expect(extractWordsFromSegment(null, 'v1')).toEqual([])
+    expect(extractWordsFromSegment({ text: '' }, 'v1')).toEqual([])
+  })
+
+  it('T-EWS-2 — filters out tier-1 (A1/A2) words', () => {
+    // "go", "home", "big" are tier 1 — should not appear
+    const cards = extractWordsFromSegment(seg('go home big dog'), 'v1')
+    for (const c of cards) {
+      expect(c.difficulty_tier).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('T-EWS-3 — STOPS_ALWAYS words are excluded', () => {
+    // "wasnt", "gonna", "yeah" are in STOPS_ALWAYS
+    const cards = extractWordsFromSegment(seg('yeah he wasnt gonna accomplish it'), 'v1')
+    const keywords = cards.map(c => c.keyword)
+    expect(keywords).not.toContain('yeah')
+    expect(keywords).not.toContain('wasnt')
+    expect(keywords).not.toContain('gonna')
+  })
+
+  it('T-EWS-4 — results are sorted hardest-first (descending difficulty_tier)', () => {
+    // "accomplish" (AWL tier 3) and "sophisticated" (tier 4) in same segment
+    const cards = extractWordsFromSegment(
+      seg('She will accomplish sophisticated analysis of the project.'), 'v1'
+    )
+    for (let i = 1; i < cards.length; i++) {
+      expect(cards[i - 1].difficulty_tier).toBeGreaterThanOrEqual(cards[i].difficulty_tier)
+    }
+  })
+
+  it('T-EWS-5 — card has expected shape with correct videoId prefix', () => {
+    const cards = extractWordsFromSegment(seg('The analysis was remarkable.'), 'testvid')
+    expect(cards.length).toBeGreaterThan(0)
+    const card = cards[0]
+    expect(card.id).toMatch(/^testvid_/)
+    expect(card.video_id).toBe('testvid')
+    expect(card.type).toBe('word')
+    expect(typeof card.clip_start).toBe('number')
+    expect(typeof card.clip_end).toBe('number')
+    expect(card.clip_end).toBeGreaterThan(card.clip_start)
   })
 })

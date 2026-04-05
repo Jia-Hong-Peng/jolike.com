@@ -80,7 +80,14 @@
           </span>
 
           <!-- Cloze sentence: word replaced with blank -->
-          <p class="text-gray-200 text-base leading-relaxed" v-html="clozeSentence"></p>
+          <p class="text-gray-200 text-base leading-relaxed">
+            <HighlightedSentence
+              v-if="currentEntry?.sentence"
+              :sentence="currentEntry.sentence"
+              :keyword="currentEntry.word"
+              :cloze="true"
+            />
+          </p>
 
           <p class="text-gray-500 text-xs mt-2">先在腦海中想出這個單字，再點下方按鈕</p>
         </div>
@@ -156,8 +163,12 @@
           <p
             v-if="currentEntry.sentence"
             class="text-gray-400 text-sm leading-relaxed pt-1"
-            v-html="highlightedSentence"
-          ></p>
+          >
+            <HighlightedSentence
+              :sentence="currentEntry.sentence"
+              :keyword="currentEntry.word"
+            />
+          </p>
         </div>
 
         <!-- Action buttons -->
@@ -185,6 +196,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import VideoClip from '@/components/VideoClip.vue'
+import HighlightedSentence from '@/components/HighlightedSentence.vue'
 import { getDue, markReview } from '@/composables/useSRS.js'
 import { subscribePush, isPushEnabled } from '@/composables/usePWA.js'
 import { lookupDefinition } from '@/composables/useDictionary.js'
@@ -221,26 +233,6 @@ watch(currentEntry, async (entry) => {
     dictData.value = await lookupDefinition(entry.lemma || entry.word)
   }
 }, { immediate: true })
-
-// ── Cloze sentence: replace keyword with blank ────────────────────────────────
-const clozeSentence = computed(() => {
-  if (!currentEntry.value?.sentence) return ''
-  const kw = currentEntry.value.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return currentEntry.value.sentence.replace(
-    new RegExp(`(${kw})`, 'gi'),
-    '<span class="inline-block bg-gray-700 text-gray-700 rounded px-2 min-w-[4rem] select-none">$1</span>',
-  )
-})
-
-// Highlighted sentence for revealed phase
-const highlightedSentence = computed(() => {
-  if (!currentEntry.value?.sentence) return ''
-  const kw = currentEntry.value.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return currentEntry.value.sentence.replace(
-    new RegExp(`(${kw})`, 'gi'),
-    '<mark class="bg-yellow-400/30 text-yellow-300 rounded px-0.5">$1</mark>',
-  )
-})
 
 const typeLabel = computed(() => ({
   word: '單字', phrase: '片語', pattern: '句型',

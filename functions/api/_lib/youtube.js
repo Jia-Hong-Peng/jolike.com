@@ -94,13 +94,41 @@ export async function fetchTranscript(videoId) {
 /**
  * Extract captionTracks array from the YouTube watch page HTML.
  * They live inside ytInitialPlayerResponse as JSON.
+ *
+ * Uses bracket counting instead of regex so nested arrays inside track objects
+ * (e.g. translationLanguages) don't truncate the extraction prematurely.
  */
 function extractCaptionTracks(html) {
-  // Match the captionTracks JSON array directly — fastest extraction
-  const match = html.match(/"captionTracks":(\[.*?\])/)
-  if (!match) return null
+  const key = '"captionTracks":'
+  const start = html.indexOf(key)
+  if (start === -1) return null
+
+  // Find the opening '[' of the array value
+  const bracketStart = html.indexOf('[', start + key.length)
+  if (bracketStart === -1) return null
+
+  // Walk forward counting brackets until the matching ']'
+  let depth = 0
+  let inString = false
+  let escape = false
+  let end = -1
+
+  for (let i = bracketStart; i < html.length; i++) {
+    const ch = html[i]
+    if (escape) { escape = false; continue }
+    if (ch === '\\' && inString) { escape = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+    if (ch === '[') depth++
+    else if (ch === ']') {
+      depth--
+      if (depth === 0) { end = i; break }
+    }
+  }
+
+  if (end === -1) return null
   try {
-    return JSON.parse(match[1])
+    return JSON.parse(html.slice(bracketStart, end + 1))
   } catch {
     return null
   }

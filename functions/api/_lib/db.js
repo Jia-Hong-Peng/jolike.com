@@ -76,7 +76,7 @@ export async function saveVideo(DB, { id, title, duration_seconds, transcript })
 
   await DB
     .prepare(
-      'INSERT INTO videos (id, title, duration_seconds, analyzed_at, raw_transcript) VALUES (?, ?, ?, ?, ?)'
+      'INSERT OR IGNORE INTO videos (id, title, duration_seconds, analyzed_at, raw_transcript) VALUES (?, ?, ?, ?, ?)'
     )
     .bind(id, title ?? '', duration_seconds ?? 0, analyzed_at, JSON.stringify(transcript))
     .run()

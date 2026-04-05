@@ -24,35 +24,16 @@
  */
 
 import nlp from 'compromise'
-import awlWords from '@/data/coca5000.json'       // business vocab fallback (kept for B2 tier)
-import awlNawlData from '@/data/awl_nawl.json'    // AWL 1-10 + NAWL(11) + TSL(12), 2336 entries
-import ngslDefs from '@/data/ngsl_defs.json'      // NGSL+TSL easy English definitions, 4054 words
 import opalPhrasesData from '@/data/opal_phrases.json' // Oxford OPAL academic phrases, 572 entries
-import cedict from '@/data/cedict.json'
-import cefrVocab from '@/data/cefr_vocab.json'    // CEFR A1-C2 (8818 words, Open Language Profiles)
 
-// Primary: CEFR-J + Octanove vocabulary profile (Open Language Profiles project)
-// { word: tier } where 1=A1/A2, 2=B1, 3=B2, 4=C1/C2
-const cefrMap = cefrVocab
-
-// Academic word map: word → sublist number
-//   1-10 = AWL sublist (1 = most frequent/important academic, 10 = least)
-//   11   = NAWL (New Academic Word List — modern academic corpus, 288M words)
-//   12   = TSL  (TOEIC Service List — business/commercial English)
-// Research: AWL Sublist 1 gives ~2% IELTS reading coverage per sublist
-//           NGSL + TSL = 98.5% TOEIC coverage (Browne & Culligan 2021)
-const awlNawlMap = awlNawlData   // { word: sublist_num }
-
-// NGSL + TSL easy English definitions: { word: "simple definition" }
-// Source: NGSL 1.2 (2809 words) + TSL 1.2 (1245 TOEIC-only words)
-const ngslDefMap = ngslDefs
+// Pure lookup functions shared with lookup.js (no compromise.js dependency)
+// lookup.js imports the data directly; nlp.js re-uses the same implementations.
+export { morphStems, canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, lookupNgslDef } from '@/lib/lookup.js'
+import { morphStems, canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, lookupNgslDef } from '@/lib/lookup.js'
 
 // OPAL academic phrases: Set of Oxford Phrasal Academic Lexicon entries
 // 572 academic collocations: "as a result", "in terms of", "based on", etc.
 const opalPhraseSet = new Set(opalPhrasesData)
-
-// Legacy business vocab fallback (kept for coverage of TOEIC/business terms)
-const awlSet = new Set(awlWords.map(w => w.toLowerCase()))
 
 const MAX_WORDS   = 8   // quality over quantity — fewer high-value cards beats many mediocre ones
 const MAX_PHRASES = 5
@@ -78,156 +59,6 @@ const STOPS_ALWAYS = new Set([
   'ive','hed','shed','theyd','youd','hell','shell','theyll','youll',
 ])
 
-
-// ── Morphological stem generation ─────────────────────────────────────────────
-// Returns candidate base forms for an inflected word (ordered: most likely first)
-function morphStems(w) {
-  const stems = []
-  if (w.endsWith('ing') && w.length > 5) {
-    stems.push(w.slice(0, -3))           // cooling    → cool
-    stems.push(w.slice(0, -3) + 'e')    // using      → use, chaperoning → chaperone
-    stems.push(w.slice(0, -4))           // running    → run (double consonant)
-  }
-  if (w.endsWith('er') && w.length > 4) {
-    const base = w.slice(0, -2)
-    stems.push(base)                     // cheaper    → cheap
-    if (base.length >= 3 && base[base.length - 1] === base[base.length - 2]) {
-      stems.push(base.slice(0, -1))      // bigger     → big (double consonant)
-    }
-  }
-  if (w.endsWith('est') && w.length > 5) {
-    const base = w.slice(0, -3)
-    stems.push(base)                     // cheapest   → cheap
-    if (base.length >= 3 && base[base.length - 1] === base[base.length - 2]) {
-      stems.push(base.slice(0, -1))      // biggest    → big (double consonant)
-    }
-  }
-  if (w.endsWith('ened') && w.length > 6) stems.push(w.slice(0, -4))  // softened → soft, darkened → dark
-  if (w.endsWith('ed') && w.length > 4) {
-    const base2 = w.slice(0, -2)
-    stems.push(base2)                    // started    → start, softened → soften
-    stems.push(base2 + 'e')             // moved      → move  (base2 = 'mov' + 'e')
-    // Double consonant only: stopped → stopp → stop (only when last two of base are same)
-    if (base2.length >= 3 && base2[base2.length - 1] === base2[base2.length - 2]) {
-      stems.push(base2.slice(0, -1))    // stopped    → stop
-    }
-  }
-  if (w.endsWith('eth') && w.length > 5) stems.push(w.slice(0, -3))  // raineth → rain (archaic 3rd-person singular)
-  if (w.endsWith('ly') && w.length > 4) stems.push(w.slice(0, -2))   // quickly → quick
-  if (w.endsWith('tion') && w.length > 6) stems.push(w.slice(0, -3)) // reduction → reduc
-  if (w.endsWith('ness') && w.length > 6) stems.push(w.slice(0, -4)) // darkness → dark
-  if (w.endsWith('ment') && w.length > 6) stems.push(w.slice(0, -4)) // movement → move
-  if (w.endsWith('ity') && w.length > 6) stems.push(w.slice(0, -3))  // ability → abil
-  if (w.endsWith('ical') && w.length > 6) stems.push(w.slice(0, -4)) // historical → histor
-  if (w.endsWith('s') && w.length > 4 && !w.endsWith('ss')) {
-    stems.push(w.slice(0, -1))           // cars → car
-    stems.push(w.slice(0, -2))           // houses → hous (rough)
-  }
-  return stems
-}
-
-// ── Canonical (lemma) form ─────────────────────────────────────────────────────
-// Returns the base/dictionary form of a word for display and lookup.
-// e.g. chaperoning → chaperone, biggest → big, running → run
-//
-// Strategy: among the word itself and all its morphological stems, pick the
-// SHORTEST one that appears in a vocabulary list. cefr_vocab includes inflected
-// forms (e.g. "running" is listed alongside "run"), so "already in vocab" does
-// not mean "base form" — we must prefer the shorter vocab entry.
-function canonicalForm(word) {
-  const w = word.toLowerCase()
-
-  // Collect all candidates: original + morphological stems
-  const candidates = [w, ...morphStems(w)]
-
-  // Pick the shortest candidate that is attested in any vocabulary list
-  let best = null
-  for (const c of candidates) {
-    if (c.length < 2) continue
-    const inVocab = cefrMap[c] !== undefined || awlSet.has(c)
-    if (inVocab && (best === null || c.length < best.length)) best = c
-  }
-  if (best !== null) return best
-
-  // Heuristic for unknown -ed words (soften not in vocab, but soften is the clear base)
-  if (w.endsWith('ed') && w.length > 4) {
-    const plain = w.slice(0, -2)         // softened → soften, started → start
-    if (plain.length >= 3) {
-      // Double consonant: stopped → stopp → stop
-      if (plain[plain.length - 1] === plain[plain.length - 2]) return plain.slice(0, -1)
-      return plain
-    }
-  }
-
-  // Heuristic for unknown -ing words (base form not in any vocab list)
-  // chaperoning → chaperone, running → run
-  if (w.endsWith('ing') && w.length > 4) {
-    const plain = w.slice(0, -3)
-    if (plain.length >= 2) {
-      // Double consonant: running → runn → run
-      if (plain.length >= 3 && plain[plain.length - 1] === plain[plain.length - 2]) {
-        return plain.slice(0, -1)
-      }
-      // +e form: chaperoning → chaperone
-      return plain + 'e'
-    }
-  }
-
-  return w  // unknown word with no matching stem — keep as-is
-}
-
-// ── Academic word lookup ───────────────────────────────────────────────────────
-// Returns AWL sublist (1-10) or 11 for NAWL, or 0 if not academic
-function awlSublist(word) {
-  const w = word.toLowerCase()
-  if (awlNawlMap[w] !== undefined) return awlNawlMap[w]
-  for (const stem of morphStems(w)) {
-    if (awlNawlMap[stem] !== undefined) return awlNawlMap[stem]
-  }
-  return 0
-}
-
-// ── Difficulty tier lookup (CEFR-based with morphological stem fallback) ──────
-// Returns 1=A1/A2, 2=B1, 3=B2, 4=C1/C2
-//
-// Academic word override (research-backed):
-//   AWL (sublist 1-10) and NAWL words are academically significant for IELTS/TOEFL.
-//   Research shows AWL covers ~10% of academic texts (Coxhead 2000).
-//   These words receive a minimum tier of 3 (B2) so they always surface
-//   at intermediate level, even if CEFR frequency marks them as B1.
-export function wordDifficultyTier(word) {
-  const w = word.toLowerCase()
-
-  // Direct lookup in CEFR vocabulary
-  let tier = cefrMap[w]
-
-  // Morphological stem fallback — find lowest (easiest) tier among all stems
-  if (tier === undefined) {
-    for (const stem of morphStems(w)) {
-      const t = cefrMap[stem]
-      if (t !== undefined && (tier === undefined || t < tier)) tier = t
-    }
-  }
-
-  // Academic word override: AWL/NAWL/TSL words are at least B2 (tier 3)
-  // This ensures important IELTS/TOEFL/TOEIC vocabulary is never hidden at intermediate level.
-  // Note: tier 4 (C1+) is preserved — we only bump UP, never down.
-  const sublist = awlSublist(w)
-  if (sublist > 0) {
-    if (tier !== undefined) return Math.max(tier, 3)
-    return 3
-  }
-
-  if (tier !== undefined) return tier
-
-  // Business/general high-freq fallback (legacy coca5000 list)
-  if (awlSet.has(w)) return 3
-  for (const stem of morphStems(w)) {
-    if (awlSet.has(stem)) return 3
-  }
-  return 4 // C1+ specialized / unknown
-}
-
 // Minimum tier required for this level
 function minTierForLevel(level) {
   if (level === 'advanced')     return 4  // C1+ only (rare/specialized); fallback to 3 if sparse
@@ -245,7 +76,7 @@ function minLength(level) {
 
 function learningScore(word, freq, posMult = 1.0) {
   const tier = wordDifficultyTier(word)
-  const cedictBoost = cedict[word] ? 1.2 : 1.0
+  const cedictBoost = lookupMeaning(word) ? 1.2 : 1.0
 
   // Priority bonus by source list (research-backed):
   //   AWL Sublist 1 → +4.0pts (highest IELTS coverage, ~2% per sublist)
@@ -263,22 +94,6 @@ function learningScore(word, freq, posMult = 1.0) {
 
   // Tier is the primary signal (scale 10–40). Frequency + POS + cedict + academic lists are secondary.
   return tier * 10 + Math.log1p(freq) * posMult * cedictBoost + awlBoost
-}
-
-export function lookupMeaning(keyword) {
-  const key = keyword.toLowerCase()
-  // Direct match first; fall back to canonical (lemmatized) form so "running" → "run"
-  return cedict[key]
-    || cedict[key.replace(/-/g, ' ')]
-    || cedict[canonicalForm(key)]
-    || ''
-}
-
-// NGSL/TSL easy English definition — used as fallback when Free Dictionary API
-// definition is unavailable. Returns empty string if not in NGSL/TSL.
-export function lookupNgslDef(keyword) {
-  const key = keyword.toLowerCase()
-  return ngslDefMap[key] || ngslDefMap[key.replace(/-/g, ' ')] || ''
 }
 
 function getClip(segment) {

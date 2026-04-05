@@ -190,7 +190,6 @@ import LearningCard from '@/components/LearningCard.vue'
 import ActionBar from '@/components/ActionBar.vue'
 import VocabList from '@/components/VocabList.vue'
 import { getVideo } from '@/services/api.js'
-import { extractLearningItems } from '@/lib/nlp.js'
 import { useLearningSession } from '@/composables/useLearningSession.js'
 import { scheduleReview, getDue, getKnownWords } from '@/composables/useSRS.js'
 
@@ -255,6 +254,7 @@ onMounted(async () => {
   try {
     const data = await getVideo(videoId)
     transcript.value = data.transcript
+    const { extractLearningItems } = await import('@/lib/nlp.js')
     const items = extractLearningItems(data.transcript, videoId, level.value, getKnownWords())
     if (items.length === 0) {
       if (getKnownWords().size > 0) {
@@ -350,9 +350,10 @@ function onKeyDown(e) {
 onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
 // When level changes, re-extract from cached transcript and reset session
-watch(level, (newLevel) => {
+watch(level, async (newLevel) => {
   localStorage.setItem('jolike_level', newLevel)
   if (transcript.value.length === 0) return
+  const { extractLearningItems } = await import('@/lib/nlp.js')
   const items = extractLearningItems(transcript.value, videoId, newLevel, getKnownWords())
   if (items.length > 0) {
     cards.value = items

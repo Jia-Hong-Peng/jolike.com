@@ -91,7 +91,9 @@
 
       <!-- Sentence context -->
       <div v-if="card.sentence" class="space-y-1">
-        <p class="text-sm text-gray-400 leading-relaxed" v-html="highlightedSentence"></p>
+        <p class="text-sm text-gray-400 leading-relaxed">
+          <HighlightedSentence :sentence="card.sentence" :keyword="card.keyword" />
+        </p>
         <p v-if="translationText" class="text-xs text-blue-300 leading-relaxed">{{ translationText }}</p>
       </div>
 
@@ -104,8 +106,9 @@
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue'
 import VideoClip from './VideoClip.vue'
+import HighlightedSentence from './HighlightedSentence.vue'
 import { lookupDefinition } from '@/composables/useDictionary.js'
-import { lookupNgslDef } from '@/lib/nlp.js'
+import { lookupNgslDef } from '@/lib/lookup.js'
 
 const props = defineProps({
   card: {
@@ -239,15 +242,6 @@ defineExpose({
 })
 
 // ── Display computed ──────────────────────────────────────────────────────────
-const highlightedSentence = computed(() => {
-  if (!props.card.sentence) return ''
-  const kw = props.card.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return props.card.sentence.replace(
-    new RegExp(`(${kw})`, 'gi'),
-    '<mark class="bg-yellow-400/30 text-yellow-300 rounded px-0.5">$1</mark>',
-  )
-})
-
 const chineseMeaningClass = computed(() => {
   // Show Chinese in muted color when we already have a clear English definition
   return dictData.value?.definition ? 'text-gray-400' : 'text-gray-300'

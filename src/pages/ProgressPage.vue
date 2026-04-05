@@ -266,14 +266,14 @@ function readAllEntries() {
   return entries
 }
 
-const now = Date.now()
 const { streak } = getStreak()
 
 const totalWords    = computed(() => allEntries.value.length)
-const dueCount      = computed(() => allEntries.value.filter(e => e.nextReview <= now).length)
+const dueCount      = computed(() => { const now = Date.now(); return allEntries.value.filter(e => e.nextReview <= now).length })
 const totalReviews  = computed(() => allEntries.value.reduce((sum, e) => sum + (e.reviews ?? 0), 0))
 
 const nextReviewLabel = computed(() => {
+  const now = Date.now()
   const future = allEntries.value
     .filter(e => e.nextReview > now)
     .map(e => e.nextReview)
