@@ -40,7 +40,7 @@ const opalPhraseSet = new Set(opalPhrasesData)
 // The level + tier threshold + knownWords filter determine what appears.
 // Sorted by learningScore so highest-value vocab-list words always come first.
 const CLIP_MIN_S  = 3
-const MIN_WORDS_BEFORE_FALLBACK = 5  // if fewer words pass tier, drop tier by 1
+const MIN_WORDS_BEFORE_FALLBACK = 8  // if fewer words pass tier, drop tier by 1
 
 // ── Always-excluded function words (POS tagging misses) ───────────────────────
 const STOPS_ALWAYS = new Set([
@@ -189,23 +189,20 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     return candidates.reduce((best, s) => s.text.length < best.text.length ? s : best)
   }
 
-  // Tier-filtered ranking — knownWords filter happens here so fallback accounts for it.
-  // Words in any curated vocab list (awlSublist > 0 or isKnownVocab) bypass the tier
-  // threshold so they always compete on score; only unknown jargon is gated by tier.
+  // Tier-filtered ranking — tier threshold is the strict level gate.
+  // listBonus in learningScore() handles ordering (vocab-list words score higher);
+  // the tier filter itself is NOT bypassed so easy words are excluded for advanced users.
   function rankWords(tierThreshold) {
     return [...wordFreq.entries()]
-      .filter(([w]) => {
-        if (awlSublist(w) > 0 || isKnownVocab(w)) return true  // always include list words
-        return wordDifficultyTier(w) >= tierThreshold           // gate unknown words by tier
-      })
+      .filter(([w]) => wordDifficultyTier(w) >= tierThreshold)
       .filter(([w]) => !knownWords.has(w))
       .sort((a, b) => learningScore(b[0], b[1], posMultiplier(b[0]))
                     - learningScore(a[0], a[1], posMultiplier(a[0])))
   }
 
-  // Adaptive tier fallback: if too sparse, lower threshold by 1
+  // Adaptive tier fallback: cascade down until enough words or hit tier 1
   let rankedWords = rankWords(minTier)
-  if (rankedWords.length < MIN_WORDS_BEFORE_FALLBACK && minTier > 1) {
+  while (rankedWords.length < MIN_WORDS_BEFORE_FALLBACK && minTier > 1) {
     minTier -= 1
     rankedWords = rankWords(minTier)
   }
