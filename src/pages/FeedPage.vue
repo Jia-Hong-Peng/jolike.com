@@ -83,8 +83,9 @@
           :key="currentCard.id"
           :card="currentCard"
           :loop="loopEnabled"
+          :playback-rate="slowMode ? 0.7 : 1.0"
         >
-          <!-- Replay + Loop controls -->
+          <!-- Replay + Loop + Slow controls -->
           <div class="flex gap-2 mt-2">
             <button
               class="flex-1 flex items-center justify-center gap-2 rounded-2xl py-3 font-semibold
@@ -93,6 +94,18 @@
               @click="replayCard"
             >
               ↺ 重聽
+            </button>
+            <button
+              class="flex items-center justify-center gap-1 rounded-2xl px-4 py-3 font-semibold
+                     text-base transition-colors min-h-[48px]"
+              :class="slowMode
+                ? 'bg-teal-700 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+              title="慢速播放 0.7x"
+              @click="slowMode = !slowMode"
+            >
+              🐢
+              <span class="text-sm">{{ slowMode ? '0.7x' : '慢速' }}</span>
             </button>
             <button
               class="flex items-center justify-center gap-1 rounded-2xl px-4 py-3 font-semibold
@@ -185,6 +198,7 @@ const cardRef = ref(null)
 const showVocabList = ref(false)
 const transcript = ref([])
 const loopEnabled = ref(false)
+const slowMode = ref(false)
 
 // Level: persisted in localStorage
 const LEVELS = [

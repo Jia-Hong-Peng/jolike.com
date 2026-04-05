@@ -9,6 +9,7 @@
         :end="card.clip_end"
         :loop="loop"
         :hide-controls="true"
+        :playback-rate="playbackRate"
       />
     </div>
 
@@ -114,6 +115,10 @@ const props = defineProps({
   loop: {
     type: Boolean,
     default: false,
+  },
+  playbackRate: {
+    type: Number,
+    default: 1.0,
   },
 })
 

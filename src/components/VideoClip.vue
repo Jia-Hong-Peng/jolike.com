@@ -42,6 +42,8 @@ const props = defineProps({
   seamless:     { type: Boolean, default: false },
   // loop: auto-replay the clip when it ends
   loop:         { type: Boolean, default: false },
+  // playbackRate: 1.0 = normal, 0.7 = slow
+  playbackRate: { type: Number,  default: 1.0 },
 })
 
 const emit = defineEmits(['ended'])
@@ -106,6 +108,9 @@ function play() {
   showPlayOverlay.value = false
   player.seekTo(props.start, true)
   player.playVideo()
+  if (props.playbackRate !== 1.0) {
+    player.setPlaybackRate(props.playbackRate)
+  }
   startInterval()
 }
 
@@ -160,6 +165,13 @@ onBeforeUnmount(() => {
 watch(() => props.start, () => {
   if (!props.seamless && player && typeof player.seekTo === 'function') {
     play()
+  }
+})
+
+// Apply playback rate change immediately (when slow mode toggled mid-play)
+watch(() => props.playbackRate, (rate) => {
+  if (player && typeof player.setPlaybackRate === 'function') {
+    player.setPlaybackRate(rate)
   }
 })
 
