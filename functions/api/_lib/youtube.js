@@ -21,6 +21,10 @@
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 const ANDROID_UA = 'com.google.android.youtube/20.10.38 (Linux; U; Android 14)'
 const ANDROID_CLIENT_VERSION = '20.10.38'
+const ANDROID_API_KEY = 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM394'
+const IOS_UA = 'com.google.ios.youtube/19.29.1 (iPhone; CPU iPhone OS 17_5_1 like Mac OS X)'
+const IOS_CLIENT_VERSION = '19.29.1'
+const IOS_API_KEY = 'AIzaSyB-63vPrdThhKuerbB2N_indFcXdrWiW_Y'
 const WEB_CLIENT_VERSION = '2.20241201.00.00'
 
 // ── Channel helpers ────────────────────────────────────────────────────────────
@@ -419,11 +423,15 @@ export function extractVideoId(url) {
  * @returns {Promise<{transcript: Array<{text,start,dur}>} | {error: string}>}
  */
 export async function fetchTranscript(videoId) {
-  // Strategy 1: InnerTube ANDROID client (primary — works without PO token)
-  const result = await fetchTranscriptViaAndroid(videoId)
-  if (result) return result
+  // Strategy 1: InnerTube ANDROID client
+  const android = await fetchTranscriptViaAndroid(videoId)
+  if (android) return android
 
-  // Strategy 2: Watch page HTML parsing (fallback)
+  // Strategy 2: InnerTube iOS client (different auth path — independent of ANDROID blocks)
+  const ios = await fetchTranscriptViaIOS(videoId)
+  if (ios) return ios
+
+  // Strategy 3: Watch page HTML parsing (last resort)
   return fetchTranscriptViaWatchPage(videoId)
 }
 
@@ -441,22 +449,22 @@ export async function fetchTranscript(videoId) {
 async function fetchTranscriptViaAndroid(videoId) {
   let tracks
   try {
-    const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+    const res = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${ANDROID_API_KEY}&prettyPrint=false`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': ANDROID_UA,
-        // Force English locale so YouTube returns English caption tracks
-        // even when the request originates from a non-English-speaking region.
         'Accept-Language': 'en-US,en;q=0.9',
+        'X-YouTube-Client-Name': '3',
+        'X-YouTube-Client-Version': ANDROID_CLIENT_VERSION,
       },
       body: JSON.stringify({
         context: {
           client: {
             clientName: 'ANDROID',
             clientVersion: ANDROID_CLIENT_VERSION,
-            hl: 'en',   // UI language → English caption tracks
-            gl: 'US',   // region → avoids region-locked caption restrictions
+            hl: 'en',
+            gl: 'US',
           },
         },
         videoId,
@@ -493,7 +501,66 @@ async function fetchTranscriptViaAndroid(videoId) {
 }
 
 // ---------------------------------------------------------------------------
-// Strategy 2: Watch page HTML parsing (fallback)
+// Strategy 2: InnerTube iOS client
+// ---------------------------------------------------------------------------
+
+async function fetchTranscriptViaIOS(videoId) {
+  let tracks
+  try {
+    const res = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${IOS_API_KEY}&prettyPrint=false`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': IOS_UA,
+        'Accept-Language': 'en-US,en;q=0.9',
+        'X-YouTube-Client-Name': '5',
+        'X-YouTube-Client-Version': IOS_CLIENT_VERSION,
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'IOS',
+            clientVersion: IOS_CLIENT_VERSION,
+            deviceModel: 'iPhone16,2',
+            hl: 'en',
+            gl: 'US',
+          },
+        },
+        videoId,
+      }),
+      signal: AbortSignal.timeout(8000),
+    })
+    if (res.status === 429) return { error: 'RATE_LIMITED' }
+    if (!res.ok) return null
+    const data = await res.json()
+    tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks
+  } catch {
+    return null
+  }
+
+  if (!Array.isArray(tracks) || tracks.length === 0) return null
+
+  const captionUrl = findEnglishCaptionUrl(tracks)
+  if (!captionUrl) return null
+
+  try {
+    const res = await fetch(captionUrl, {
+      headers: { 'User-Agent': BROWSER_UA },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return null
+    const body = await res.text()
+    if (!body) return null
+    const transcript = parseCaptions(body)
+    if (transcript.length === 0) return null
+    return { transcript }
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Strategy 3: Watch page HTML parsing (fallback)
 // ---------------------------------------------------------------------------
 
 async function fetchTranscriptViaWatchPage(videoId) {
