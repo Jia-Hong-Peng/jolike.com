@@ -377,7 +377,7 @@ async function main() {
 
     for (const v of stubs) {
       const idx = success + noCaptions + rateLimited + errors + 1
-      process.stdout.write(`   [${idx}/${stubs.length}] ${v.title?.substring(0,60) || v.id} ... `)
+      process.stdout.write(`   [${idx}/${stubs.length}] ${v.id} | ${v.title?.substring(0,50) || ''} ... `)
 
       const result = await fetchTranscriptForVideo(v.id)
 
