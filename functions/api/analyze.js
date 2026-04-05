@@ -81,8 +81,11 @@ export async function onRequestPost(context) {
     return jsonError(429, 'RATE_LIMITED', 'YouTube 請求過於頻繁，請稍後再試')
   }
   if (result.error === 'NO_CAPTIONS') {
-    // Stub with no English captions — remove it so it doesn't clutter the library
-    if (isStub) await deleteVideo(DB, videoId).catch(() => {})
+    // If it's a stub, Cloudflare IPs may be blocked by YouTube — don't delete.
+    // The transcript will be fetched via GitHub Actions (unblocked IPs).
+    if (isStub) {
+      return jsonError(202, 'TRANSCRIPT_PENDING', '字幕正在後台處理中，請稍後再試或直接從學習動態開啟影片')
+    }
     return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
   }
   if (result.error) {

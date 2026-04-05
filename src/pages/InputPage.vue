@@ -81,7 +81,7 @@
                  disabled:cursor-not-allowed text-white font-semibold rounded-2xl
                  py-4 text-sm transition-colors flex items-center justify-center gap-1.5
                  min-h-[56px]"
-          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS'"
+          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS' || errorCode === 'TRANSCRIPT_PENDING'"
           @click="submitWithMode('feed')"
         >
           <span v-if="loading && activeMode === 'feed'" class="animate-spin text-lg">⟳</span>
@@ -93,7 +93,7 @@
                  disabled:cursor-not-allowed text-white font-semibold rounded-2xl
                  py-4 text-sm transition-colors flex items-center justify-center gap-1.5
                  min-h-[56px]"
-          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS'"
+          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS' || errorCode === 'TRANSCRIPT_PENDING'"
           @click="submitWithMode('shadow')"
         >
           <span v-if="loading && activeMode === 'shadow'" class="animate-spin text-lg">⟳</span>
