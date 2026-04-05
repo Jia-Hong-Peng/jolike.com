@@ -29,6 +29,26 @@
       </div>
     </div>
 
+    <!-- Level selector -->
+    <div class="w-full max-w-sm mb-5">
+      <p class="text-gray-500 text-xs text-center mb-2">我的英文程度</p>
+      <div class="flex gap-2 bg-gray-900 rounded-2xl p-1.5">
+        <button
+          v-for="lv in LEVELS"
+          :key="lv.key"
+          class="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all min-h-[44px]"
+          :class="level === lv.key
+            ? lv.activeClass
+            : 'text-gray-500 hover:text-gray-300'"
+          :title="lv.desc"
+          @click="setLevel(lv.key)"
+        >
+          {{ lv.label }}
+        </button>
+      </div>
+      <p class="text-gray-600 text-xs text-center mt-1.5">{{ currentLevelDesc }}</p>
+    </div>
+
     <!-- Input form -->
     <div class="w-full max-w-sm">
       <div class="relative">
@@ -207,6 +227,36 @@
 import { ref, computed } from 'vue'
 import { analyzeVideo, getErrorMessage } from '@/services/api.js'
 import { getDue, getStreak } from '@/composables/useSRS.js'
+
+const LEVELS = [
+  {
+    key: 'beginner',
+    label: '初級',
+    desc: '顯示所有詞彙，含 A1/A2 基礎單字',
+    activeClass: 'bg-green-700 text-white shadow',
+  },
+  {
+    key: 'intermediate',
+    label: '中級',
+    desc: 'B2+ 學術詞彙，適合 IELTS/TOEFL 備考（推薦）',
+    activeClass: 'bg-blue-600 text-white shadow',
+  },
+  {
+    key: 'advanced',
+    label: '進階',
+    desc: 'C1+ 高階術語，適合已流利或衝高分者',
+    activeClass: 'bg-purple-700 text-white shadow',
+  },
+]
+
+const LEVEL_KEY = 'jolike_level'
+const level = ref(localStorage.getItem(LEVEL_KEY) || 'intermediate')
+const currentLevelDesc = computed(() => LEVELS.find(l => l.key === level.value)?.desc ?? '')
+
+function setLevel(key) {
+  level.value = key
+  localStorage.setItem(LEVEL_KEY, key)
+}
 
 const url = ref('')
 const loading = ref(false)
