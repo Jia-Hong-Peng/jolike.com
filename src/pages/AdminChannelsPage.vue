@@ -123,7 +123,10 @@
         <div v-if="transcriptProgress[ch.id]" class="mt-3">
           <div class="flex justify-between text-xs text-gray-400 mb-1">
             <span>{{ transcriptProgress[ch.id].done }} / {{ transcriptProgress[ch.id].total }} 部完成</span>
-            <span class="text-gray-600">{{ transcriptProgress[ch.id].skipped }} 無字幕</span>
+            <span class="text-gray-600">
+              <span v-if="transcriptProgress[ch.id].skipped > 0">{{ transcriptProgress[ch.id].skipped }} 無字幕</span>
+              <span v-if="transcriptProgress[ch.id].errors > 0" class="text-yellow-600 ml-2">{{ transcriptProgress[ch.id].errors }} 失敗</span>
+            </span>
           </div>
           <div class="w-full bg-gray-800 rounded-full h-2">
             <div
@@ -302,31 +305,39 @@ async function fetchTranscripts(channel) {
     return
   }
 
-  transcriptProgress[channel.id] = { done: 0, total: videos.length, skipped: 0, log: '' }
+  transcriptProgress[channel.id] = { done: 0, total: videos.length, skipped: 0, errors: 0, log: '' }
 
-  // Process in batches of 3 (avoid hammering YouTube)
-  const BATCH = 3
-  for (let i = 0; i < videos.length; i += BATCH) {
+  // Process one at a time with delay — batching hammers YouTube and triggers rate limiting
+  for (const v of videos) {
     if (channelBusy[channel.id] !== 'transcripts') break  // cancelled
 
-    const batch = videos.slice(i, i + BATCH)
-    await Promise.all(batch.map(async (v) => {
-      try {
-        transcriptProgress[channel.id].log = `處理中：${v.title || v.id}`
-        await analyzeVideo(`https://www.youtube.com/watch?v=${v.id}`)
-        transcriptProgress[channel.id].done++
-      } catch (e) {
-        // NO_CAPTIONS or other error — mark as skipped
+    transcriptProgress[channel.id].log = `處理中：${v.title || v.id}`
+    try {
+      await analyzeVideo(`https://www.youtube.com/watch?v=${v.id}`)
+      transcriptProgress[channel.id].done++
+    } catch (e) {
+      if (e?.error === 'NO_CAPTIONS') {
+        // Genuinely no English captions — stub was deleted server-side
         transcriptProgress[channel.id].skipped++
-        transcriptProgress[channel.id].done++
+      } else {
+        // Network / rate-limit error — stub stays in D1, can retry later
+        transcriptProgress[channel.id].errors++
       }
-    }))
+      transcriptProgress[channel.id].done++
+    }
+
+    // 1s gap between videos to stay under YouTube's rate limit
+    await new Promise(r => setTimeout(r, 1000))
   }
 
   const prog = transcriptProgress[channel.id]
+  const succeeded = prog.done - prog.skipped - prog.errors
+  const parts = [`成功 ${succeeded} 部`]
+  if (prog.skipped > 0) parts.push(`${prog.skipped} 部無英文字幕`)
+  if (prog.errors > 0) parts.push(`${prog.errors} 部抓取失敗（可再試）`)
   channelResult[channel.id] = {
     ok: true,
-    msg: `✓ 完成！成功 ${prog.done - prog.skipped} 部，${prog.skipped} 部無字幕`,
+    msg: `✓ 完成！${parts.join('，')}`,
   }
   channelBusy[channel.id] = null
   await loadChannels()
