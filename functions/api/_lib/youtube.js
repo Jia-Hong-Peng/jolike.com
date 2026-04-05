@@ -66,27 +66,78 @@ export async function resolveChannelId(urlOrId) {
 }
 
 /**
- * Fetch channel page and extract channel ID from JSON data.
+ * Resolve @handle → channel ID using multiple strategies.
+ *
+ * Strategy 1: InnerTube resolve_url API (most reliable, no HTML parsing)
+ * Strategy 2: YouTube channel page HTML — multiple regex patterns
+ * Strategy 3: YouTube RSS URL redirect (only for old-style usernames, rarely needed)
+ *
  * @param {string} handle - e.g. "@TED"
  * @returns {Promise<string | null>}
  */
 async function resolveHandleToChannelId(handle) {
+  // Strategy 1: InnerTube navigation/resolve_url (most reliable)
+  try {
+    const res = await fetch('https://www.youtube.com/youtubei/v1/navigation/resolve_url', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': BROWSER_UA,
+        'Accept-Language': 'en-US,en;q=0.9',
+        'X-YouTube-Client-Name': '1',
+        'X-YouTube-Client-Version': WEB_CLIENT_VERSION,
+      },
+      body: JSON.stringify({
+        context: { client: { clientName: 'WEB', clientVersion: WEB_CLIENT_VERSION } },
+        url: `https://www.youtube.com/${handle}`,
+      }),
+      signal: AbortSignal.timeout(8000),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      // Response: { endpoint: { browseEndpoint: { browseId: "UCxxxxxx" } } }
+      const browseId = data?.endpoint?.browseEndpoint?.browseId
+      if (browseId && /^UC[\w-]{22}$/.test(browseId)) return browseId
+    }
+  } catch { /* fallthrough */ }
+
+  // Strategy 2: Fetch channel page HTML — try multiple patterns
   try {
     const res = await fetch(`https://www.youtube.com/${handle}`, {
       headers: {
         'User-Agent': BROWSER_UA,
         'Accept-Language': 'en-US,en;q=0.9',
+        'Cookie': 'CONSENT=YES+; SOCS=CAI;',
       },
+      redirect: 'follow',
       signal: AbortSignal.timeout(10000),
     })
-    if (!res.ok) return null
-    const html = await res.text()
-    // channelId appears as "channelId":"UCxxxxxx" in the page JSON
-    const m = html.match(/"channelId"\s*:\s*"(UC[\w-]{22})"/)
-    return m ? m[1] : null
-  } catch {
-    return null
-  }
+    if (res.ok) {
+      const html = await res.text()
+
+      // Pattern A: canonical link  <link rel="canonical" href="...UCxxxxxx">
+      const canonicalM = html.match(/<link rel="canonical"[^>]+href="https:\/\/www\.youtube\.com\/channel\/(UC[\w-]{22})"/)
+      if (canonicalM) return canonicalM[1]
+
+      // Pattern B: "channelId":"UCxxxxxx"
+      const channelIdM = html.match(/"channelId"\s*:\s*"(UC[\w-]{22})"/)
+      if (channelIdM) return channelIdM[1]
+
+      // Pattern C: "externalId":"UCxxxxxx"  (used in some page variants)
+      const externalM = html.match(/"externalId"\s*:\s*"(UC[\w-]{22})"/)
+      if (externalM) return externalM[1]
+
+      // Pattern D: "browseId":"UCxxxxxx"
+      const browseM = html.match(/"browseId"\s*:\s*"(UC[\w-]{22})"/)
+      if (browseM) return browseM[1]
+
+      // Pattern E: og:url meta tag  <meta property="og:url" content="...UCxxxxxx">
+      const ogM = html.match(/<meta[^>]+property="og:url"[^>]+content="https:\/\/www\.youtube\.com\/channel\/(UC[\w-]{22})"/)
+      if (ogM) return ogM[1]
+    }
+  } catch { /* fallthrough */ }
+
+  return null
 }
 
 /**
@@ -117,13 +168,28 @@ export async function fetchChannelInfo(channelId) {
       || data?.metadata?.channelMetadataRenderer?.title
       || null
 
-    const thumbnail = header?.avatar?.thumbnails
-      || header?.channelHandleText
+    // Thumbnail: try multiple locations in the response
+    const thumbArr = header?.avatar?.thumbnails
       || data?.metadata?.channelMetadataRenderer?.avatar?.thumbnails
+      || data?.header?.pageHeaderRenderer?.content?.pageHeaderViewModel?.image?.decoratedAvatarViewModel?.avatar?.avatarViewModel?.image?.sources
       || null
-    const thumbnail_url = Array.isArray(thumbnail) ? (thumbnail.at(-1)?.url || null) : null
+    const thumbnail_url = Array.isArray(thumbArr) ? (thumbArr.at(-1)?.url || null) : null
 
-    if (!name) return null
+    // If InnerTube gave no name, fall back to channel page oEmbed
+    if (!name) {
+      try {
+        const oembed = await fetch(
+          `https://www.youtube.com/oembed?url=https://www.youtube.com/channel/${channelId}&format=json`,
+          { signal: AbortSignal.timeout(5000) }
+        )
+        if (oembed.ok) {
+          const od = await oembed.json()
+          if (od?.author_name) return { name: od.author_name, thumbnail_url: null }
+        }
+      } catch { /* ignore */ }
+      return null
+    }
+
     return { name, thumbnail_url }
   } catch {
     return null
