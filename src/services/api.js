@@ -149,6 +149,54 @@ export async function getVocabVideos(listId, word) {
   }
 }
 
+// ── Channels (subscription management) ────────────────────────────────────────
+
+export async function getChannels() {
+  const res = await fetch(`${BASE}/api/channels`)
+  const data = await res.json().catch(() => ({}))
+  return data.channels ?? []
+}
+
+export async function addChannel(url) {
+  const res = await fetch(`${BASE}/api/channels`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw { error: data.error || 'ADD_FAILED', channel: data.channel }
+  return data
+}
+
+export async function deleteChannel(channelId) {
+  const res = await fetch(`${BASE}/api/channels/${channelId}`, { method: 'DELETE' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw { error: data.error || 'DELETE_FAILED' }
+  return data
+}
+
+export async function syncChannel(channelId) {
+  const res = await fetch(`${BASE}/api/channels/${channelId}?action=sync`, { method: 'POST' })
+  return res.json().catch(() => ({}))
+}
+
+/**
+ * Kick off full historical import: fetches all video IDs via InnerTube browse.
+ * May take 10-30s for large channels. Returns list of video objects.
+ */
+export async function importAllChannelVideos(channelId) {
+  const res = await fetch(`${BASE}/api/channels/${channelId}?action=import-all`, { method: 'POST' })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw { error: data.error || 'IMPORT_FAILED' }
+  return data  // { imported, videos: [{id, title}] }
+}
+
+export async function getChannelVideos(channelId, { limit = 200, offset = 0 } = {}) {
+  const res = await fetch(`${BASE}/api/channels/${channelId}?limit=${limit}&offset=${offset}`)
+  const data = await res.json().catch(() => ({}))
+  return data
+}
+
 /**
  * Map API error codes to user-facing messages.
  * @param {string} errorCode

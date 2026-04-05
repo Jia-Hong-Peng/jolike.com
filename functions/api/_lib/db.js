@@ -130,6 +130,99 @@ export async function saveVocabIndex(DB, videoId, vocab) {
   if (statements.length > 0) await DB.batch(statements)
 }
 
+// ── channels ──────────────────────────────────────────────────────────────────
+
+export async function getAllChannels(DB) {
+  const { results } = await DB
+    .prepare('SELECT id, name, handle, thumbnail_url, last_synced_at, import_all_done, video_count, created_at FROM channels ORDER BY created_at DESC')
+    .all()
+  return results ?? []
+}
+
+export async function getChannel(DB, id) {
+  return DB
+    .prepare('SELECT id, name, handle, thumbnail_url, last_synced_at, import_all_done, video_count, created_at FROM channels WHERE id = ?')
+    .bind(id)
+    .first()
+}
+
+export async function saveChannel(DB, { id, name, handle, thumbnail_url }) {
+  await DB
+    .prepare('INSERT OR IGNORE INTO channels (id, name, handle, thumbnail_url, created_at) VALUES (?, ?, ?, ?, ?)')
+    .bind(id, name, handle ?? null, thumbnail_url ?? null, Math.floor(Date.now() / 1000))
+    .run()
+}
+
+export async function markChannelSynced(DB, id) {
+  await DB
+    .prepare('UPDATE channels SET last_synced_at = ? WHERE id = ?')
+    .bind(Math.floor(Date.now() / 1000), id)
+    .run()
+}
+
+export async function markChannelImportDone(DB, id) {
+  await DB
+    .prepare('UPDATE channels SET import_all_done = 1 WHERE id = ?')
+    .bind(id)
+    .run()
+}
+
+export async function updateChannelVideoCount(DB, id) {
+  await DB
+    .prepare('UPDATE channels SET video_count = (SELECT COUNT(*) FROM videos WHERE channel_id = ? AND deleted_at IS NULL) WHERE id = ?')
+    .bind(id, id)
+    .run()
+}
+
+export async function deleteChannel(DB, id) {
+  await DB.prepare('DELETE FROM channels WHERE id = ?').bind(id).run()
+}
+
+/**
+ * Save a video that came from a channel subscription.
+ * Upserts — if video already exists (user-submitted), adds channel_id.
+ */
+export async function saveChannelVideo(DB, { id, title, duration_seconds, transcript, channel_id }) {
+  const analyzed_at = Math.floor(Date.now() / 1000)
+  await DB
+    .prepare(
+      `INSERT INTO videos (id, title, duration_seconds, analyzed_at, raw_transcript, channel_id)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET channel_id = COALESCE(channel_id, excluded.channel_id)`
+    )
+    .bind(id, title ?? '', duration_seconds ?? 0, analyzed_at, JSON.stringify(transcript), channel_id)
+    .run()
+}
+
+/**
+ * Save a video stub (no transcript yet) from channel import.
+ * Transcript will be fetched later when the video is actually needed.
+ */
+export async function saveChannelVideoStub(DB, { id, title, channel_id }) {
+  await DB
+    .prepare(
+      `INSERT OR IGNORE INTO videos (id, title, duration_seconds, analyzed_at, raw_transcript, channel_id)
+       VALUES (?, ?, 0, ?, '[]', ?)`
+    )
+    .bind(id, title ?? '', Math.floor(Date.now() / 1000), channel_id)
+    .run()
+}
+
+/**
+ * Get all video IDs for a channel (with/without transcript).
+ */
+export async function getChannelVideoIds(DB, channelId, { limit = 500, offset = 0 } = {}) {
+  const { results } = await DB
+    .prepare('SELECT id, title, raw_transcript FROM videos WHERE channel_id = ? AND deleted_at IS NULL ORDER BY analyzed_at DESC LIMIT ? OFFSET ?')
+    .bind(channelId, limit, offset)
+    .all()
+  return (results ?? []).map(r => ({
+    id: r.id,
+    title: r.title,
+    hasTranscript: r.raw_transcript && r.raw_transcript !== '[]',
+  }))
+}
+
 /**
  * Get all videos that contain a specific word in a vocab list.
  * Loads all rows for the list then filters by word in application code.

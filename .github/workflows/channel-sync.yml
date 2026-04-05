@@ -1,0 +1,30 @@
+name: Channel RSS Sync
+
+on:
+  schedule:
+    # Every hour (UTC) — checks all subscribed channels for new videos
+    - cron: '0 * * * *'
+  workflow_dispatch:  # manual trigger for testing
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Sync all channel RSS feeds
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST "https://jolike.com/api/channels/sync" \
+            -H "Authorization: Bearer ${{ secrets.CHANNEL_SYNC_SECRET }}" \
+            -H "Content-Type: application/json")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -1)
+
+          echo "Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::channel sync failed with status $HTTP_CODE"
+            exit 1
+          fi
