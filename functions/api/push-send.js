@@ -44,17 +44,16 @@ export async function onRequestGet(context) {
   const vapidJwk = JSON.parse(env.VAPID_PRIVATE_JWK)
   const privateKey = await importVapidPrivateKey(vapidJwk)
 
-  const payload = JSON.stringify({
-    title: 'JoLike English',
-    body: '你有單字到複習時間了！點此開始今日練習 💪',
-  })
-
+  // Send empty push (no body). Web Push payload encryption requires ECDH key
+  // agreement + AES-GCM (Content-Encoding: aes128gcm), which is non-trivial in
+  // CF Workers without a library. The SW shows a hardcoded reminder message when
+  // event.data is absent — that's sufficient for SRS review nudges.
   let sent = 0
   let failed = 0
 
   await Promise.allSettled(
     subscriptions.map(async (sub) => {
-      const result = await sendPush(sub, payload, privateKey, env)
+      const result = await sendPush(sub, privateKey, env)
       if (result === 'gone') {
         await deletePushSubscription(DB, sub.endpoint).catch(() => {})
         failed++
@@ -109,19 +108,16 @@ async function createVapidJWT(endpoint, privateKey) {
 
 const VAPID_PUBLIC_KEY = 'BJibwPlh8oxZM_Aa76J94vIZWpwWT-4ixt_1ct2qWXL6oxu8qea6KLZe6Bahx4sxN4jgtoYFfH1lCA1nzXH1JVo'
 
-async function sendPush(sub, payload, privateKey, _env) {
+async function sendPush(sub, privateKey, _env) {
   try {
     const jwt = await createVapidJWT(sub.endpoint, privateKey)
 
     const res = await fetch(sub.endpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'TTL': '86400',
         'Authorization': `vapid t=${jwt},k=${VAPID_PUBLIC_KEY}`,
-        'Content-Encoding': 'aesgcm',
       },
-      body: payload,
     })
 
     if (res.status === 410 || res.status === 404) return 'gone'

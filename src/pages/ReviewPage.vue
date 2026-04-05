@@ -226,12 +226,16 @@ onMounted(async () => {
 
 const currentEntry = computed(() => dueCards.value[currentIdx.value] ?? null)
 
-// Fetch dictionary data when card changes
+// Generation counter prevents stale dict data when user rapidly advances cards.
+let dictGen = 0
+
 watch(currentEntry, async (entry) => {
+  const gen = ++dictGen
   dictData.value = null
   phase.value = 'question'
   if (entry && entry.type === 'word') {
-    dictData.value = await lookupDefinition(entry.lemma || entry.word)
+    const data = await lookupDefinition(entry.lemma || entry.word)
+    if (gen === dictGen) dictData.value = data
   }
 }, { immediate: true })
 

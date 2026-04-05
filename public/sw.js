@@ -26,7 +26,11 @@ self.addEventListener('activate', (event) => {
 
 // --- Push: show review reminder notification ---
 self.addEventListener('push', (event) => {
-  const data = event.data ? event.data.json().catch(() => ({})) : {}
+  // PushMessageData.json() is synchronous — use try/catch, not .catch()
+  let data = {}
+  if (event.data) {
+    try { data = event.data.json() } catch { /* invalid JSON, use defaults */ }
+  }
   const title = data.title || 'JoLike English'
   const body  = data.body  || '你有單字需要複習！打開 JoLike 繼續練習。'
 
