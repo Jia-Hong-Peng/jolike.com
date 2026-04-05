@@ -40,8 +40,7 @@ if (!SECRET) {
 // ── YouTube helpers ────────────────────────────────────────────────────────────
 
 const ANDROID_UA = 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip'
-// InnerTube API key for Android client (public, rotated infrequently)
-const INNERTUBE_KEY = 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM394'
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
 /**
  * Fetch transcript via YouTube InnerTube API (Android client).
@@ -64,8 +63,9 @@ async function fetchTranscriptForVideo(videoId) {
 
 async function fetchViaInnerTube(videoId) {
   try {
+    // Android client context — different routing path, avoids watch-page IP blocks
     const res = await fetch(
-      `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}&prettyPrint=false`,
+      'https://www.youtube.com/youtubei/v1/player',
       {
         method: 'POST',
         headers: {
@@ -73,6 +73,7 @@ async function fetchViaInnerTube(videoId) {
           'User-Agent': ANDROID_UA,
           'X-YouTube-Client-Name': '3',
           'X-YouTube-Client-Version': '19.09.37',
+          'Origin': 'https://www.youtube.com',
         },
         body: JSON.stringify({
           videoId,
@@ -155,7 +156,6 @@ async function fetchViaDirectTimedtext(videoId) {
 }
 
 async function fetchViaWatchPage(videoId) {
-  const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
   try {
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
