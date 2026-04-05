@@ -75,11 +75,11 @@
       @touchend.passive="onTouchEnd"
     >
       <!-- Header -->
-      <div class="flex items-center gap-2 px-4 pt-4 pb-2 z-10 flex-shrink-0">
+      <div class="relative z-10 flex items-center gap-2 px-4 pt-4 pb-2 flex-shrink-0">
         <button
           class="bg-gray-900 text-gray-400 text-xs px-3 py-2 rounded-full border border-gray-700
-                 hover:bg-gray-800 transition-colors min-h-[32px]"
-          @click="() => (window.location.href = '/vocab-study/')"
+                 hover:bg-gray-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+          @click="goHome"
         >←</button>
         <div class="bg-gray-900 text-gray-400 text-xs px-3 py-2 rounded-full border border-gray-700">
           {{ currentIndex + 1 }} / {{ cards.length }}
