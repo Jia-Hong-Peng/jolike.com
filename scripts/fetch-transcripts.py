@@ -51,12 +51,14 @@ if not HAS_YT_TRANSCRIPT and not HAS_YTDLP:
 parser = argparse.ArgumentParser()
 parser.add_argument('--channel', default='')
 parser.add_argument('--limit', type=int, default=500)
+parser.add_argument('--cookies', default='', help='Path to cookies.txt for yt-dlp (Netscape format)')
 args = parser.parse_args()
 
-API_BASE  = os.environ.get('API_BASE', 'https://jolike.com').rstrip('/')
-SECRET    = os.environ.get('BATCH_SECRET') or os.environ.get('CHANNEL_SYNC_SECRET')
-DELAY_MS  = int(os.environ.get('DELAY_MS', '800'))
-LIMIT     = args.limit
+API_BASE    = os.environ.get('API_BASE', 'https://jolike.com').rstrip('/')
+SECRET      = os.environ.get('BATCH_SECRET') or os.environ.get('CHANNEL_SYNC_SECRET')
+DELAY_MS    = int(os.environ.get('DELAY_MS', '800'))
+LIMIT       = args.limit
+COOKIES_PATH = args.cookies or os.environ.get('YTDLP_COOKIES', '')
 
 if not SECRET:
     print("❌ BATCH_SECRET env var is required")
@@ -142,8 +144,10 @@ def fetch_via_ytdlp(video_id):
             '--output', f'{tmpdir}/%(id)s',
             '--no-playlist',
             '--extractor-args', 'youtube:player_client=android,ios,web',
-            url,
         ]
+        if COOKIES_PATH and os.path.isfile(COOKIES_PATH):
+            cmd.extend(['--cookies', COOKIES_PATH])
+        cmd.append(url)
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             # Log ALL yt-dlp output for diagnostics (returncode + stderr + stdout snippet)

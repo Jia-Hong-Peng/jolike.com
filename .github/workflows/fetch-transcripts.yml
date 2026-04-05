@@ -32,6 +32,14 @@ jobs:
       - name: Install dependencies
         run: pip install yt-dlp "youtube-transcript-api==0.6.2"
 
+      - name: Setup YouTube cookies
+        if: ${{ secrets.YOUTUBE_COOKIES != '' }}
+        run: |
+          echo "$YOUTUBE_COOKIES" | base64 -d > /tmp/yt-cookies.txt
+          echo "YTDLP_COOKIES=/tmp/yt-cookies.txt" >> "$GITHUB_ENV"
+        env:
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+
       - name: Fetch transcripts
         env:
           API_BASE: https://jolike.com
@@ -42,5 +50,8 @@ jobs:
             ARGS="--channel ${{ github.event.inputs.channel }}"
           fi
           ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
+          if [ -n "$YTDLP_COOKIES" ]; then
+            ARGS="$ARGS --cookies $YTDLP_COOKIES"
+          fi
 
           python scripts/fetch-transcripts.py $ARGS
