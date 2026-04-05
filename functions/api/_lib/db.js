@@ -68,6 +68,7 @@ export async function deletePushSubscription(DB, endpoint) {
 
 /**
  * Insert a new video record into D1.
+ * Uses INSERT OR IGNORE — does not overwrite existing records.
  * @param {D1Database} DB
  * @param {{ id: string, title: string, duration_seconds: number, transcript: Array }} video
  */
@@ -77,6 +78,27 @@ export async function saveVideo(DB, { id, title, duration_seconds, transcript })
   await DB
     .prepare(
       'INSERT OR IGNORE INTO videos (id, title, duration_seconds, analyzed_at, raw_transcript) VALUES (?, ?, ?, ?, ?)'
+    )
+    .bind(id, title ?? '', duration_seconds ?? 0, analyzed_at, JSON.stringify(transcript))
+    .run()
+}
+
+/**
+ * Upsert a video record — updates transcript + duration if the record already exists.
+ * Used when filling in transcripts for channel-import stubs.
+ * @param {D1Database} DB
+ * @param {{ id: string, title: string, duration_seconds: number, transcript: Array }} video
+ */
+export async function upsertVideo(DB, { id, title, duration_seconds, transcript }) {
+  const analyzed_at = Math.floor(Date.now() / 1000)
+  await DB
+    .prepare(
+      `INSERT INTO videos (id, title, duration_seconds, analyzed_at, raw_transcript)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         raw_transcript = excluded.raw_transcript,
+         duration_seconds = CASE WHEN excluded.duration_seconds > 0 THEN excluded.duration_seconds ELSE duration_seconds END,
+         analyzed_at = excluded.analyzed_at`
     )
     .bind(id, title ?? '', duration_seconds ?? 0, analyzed_at, JSON.stringify(transcript))
     .run()
