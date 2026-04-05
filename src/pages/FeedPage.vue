@@ -43,7 +43,12 @@
       <div class="text-center space-y-2">
         <p class="text-4xl">🎉</p>
         <p class="text-white text-xl font-bold">本次學習完成！</p>
-        <p class="text-gray-400 text-sm">共學習 {{ cards.length }} 張卡片</p>
+        <p class="text-gray-400 text-sm">
+          共 {{ cards.length }} 張卡片
+          <span v-if="sessionKnownCount > 0" class="text-green-400">
+            · 記住 {{ sessionKnownCount }} 個 ✓
+          </span>
+        </p>
       </div>
       <button
         v-if="dueCount > 0"
@@ -228,10 +233,14 @@ const {
   jumpTo,
   isComplete,
   cardStatus,
+  session,
 } = useLearningSession(videoId, cards)
 
 const currentCard = computed(() => cards.value[currentIndex.value] ?? null)
 const dueCount = computed(() => getDue().length)
+const sessionKnownCount = computed(() =>
+  Object.values(session.value?.cards ?? {}).filter(s => s === 'known').length
+)
 
 // --- Lifecycle ---
 onMounted(async () => {
