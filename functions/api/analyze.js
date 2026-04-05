@@ -78,21 +78,27 @@ export async function onRequestPost(context) {
     isStub ? Promise.resolve(cached.title || '') : fetchOEmbedTitle(videoId),
   ])
 
-  console.log(`[analyze] ${videoId} fetchTranscript result.error=${result.error ?? 'none'} segments=${result.transcript?.length ?? 0}`)
+  console.log(`[analyze] ${videoId} fetchTranscript result=${result.error ?? 'ok'} segments=${result.transcript?.length ?? 0}`)
+
+  // RATE_LIMITED = Cloudflare IP blocked by YouTube (429). Treat same as stub — save & queue.
   if (result.error === 'RATE_LIMITED') {
-    return jsonError(429, 'RATE_LIMITED', 'YouTube 請求過於頻繁，請稍後再試')
+    if (!isStub) {
+      // Save as stub so GitHub Actions can pick it up
+      await saveVideo(DB, { id: videoId, title, duration_seconds: 0, transcript: [] }).catch(() => {})
+    }
+    triggerGithubFetch(env, cached?.channel_id ?? null).catch(() => {})
+    return jsonError(422, 'TRANSCRIPT_PENDING', '字幕準備中，請稍候 1-2 分鐘再試')
   }
+
   if (result.error === 'NO_CAPTIONS') {
-    // If it's a stub, Cloudflare IPs may be blocked by YouTube — auto-trigger GitHub Actions.
+    // Stub + NO_CAPTIONS: Cloudflare IP may still be blocked (non-429 rejection). Auto-trigger.
     if (isStub) {
-      console.log(`[analyze] ${videoId} stub+NO_CAPTIONS → triggering GitHub Actions for channel ${cached.channel_id}`)
-      triggerGithubFetch(env, cached.channel_id).catch((e) => console.error(`[analyze] triggerGithubFetch failed: ${e.message}`))
+      triggerGithubFetch(env, cached.channel_id).catch(() => {})
       return jsonError(422, 'TRANSCRIPT_PENDING', '字幕準備中，請稍候 1-2 分鐘再試')
     }
     return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
   }
   if (result.error) {
-    console.log(`[analyze] ${videoId} unknown error: ${result.error}`)
     return jsonError(500, 'ANALYSIS_FAILED', '分析失敗，請稍後再試')
   }
 

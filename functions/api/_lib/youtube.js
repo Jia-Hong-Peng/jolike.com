@@ -570,10 +570,11 @@ async function fetchTranscriptViaWatchPage(videoId) {
       headers: WATCH_PAGE_HEADERS,
       signal: AbortSignal.timeout(8000),
     })
-    console.log(`[watchpage] ${videoId} status=${res.status} content-type=${res.headers.get('content-type')}`)
+    console.log(`[watchpage] ${videoId} status=${res.status}`)
+    if (res.status === 429) return { error: 'RATE_LIMITED' }
     if (!res.ok) return { error: 'NO_CAPTIONS' }
     html = await res.text()
-    console.log(`[watchpage] ${videoId} html_len=${html.length} has_captionTracks=${html.includes('"captionTracks"')} has_ytInitial=${html.includes('ytInitialPlayerResponse')}`)
+    console.log(`[watchpage] ${videoId} html_len=${html.length} has_captionTracks=${html.includes('"captionTracks"')}`)
   } catch (e) {
     console.log(`[watchpage] ${videoId} fetch threw: ${e.message}`)
     return { error: 'NETWORK_ERROR' }

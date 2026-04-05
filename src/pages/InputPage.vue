@@ -66,9 +66,13 @@
         />
       </div>
 
-      <!-- Inline error -->
+      <!-- Inline error / pending state -->
+      <div v-if="errorCode === 'TRANSCRIPT_PENDING'" class="mt-2 px-1 flex items-center gap-2">
+        <span class="animate-spin text-blue-400 text-sm">⟳</span>
+        <span class="text-sm text-blue-400">字幕準備中，自動偵測完成後直接開啟…</span>
+      </div>
       <p
-        v-if="errorCode"
+        v-else-if="errorCode"
         class="mt-2 text-sm text-red-400 px-1"
       >
         {{ errorMessage }}
@@ -81,7 +85,7 @@
                  disabled:cursor-not-allowed text-white font-semibold rounded-2xl
                  py-4 text-sm transition-colors flex items-center justify-center gap-1.5
                  min-h-[56px]"
-          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS' || errorCode === 'TRANSCRIPT_PENDING'"
+          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS'"
           @click="submitWithMode('feed')"
         >
           <span v-if="loading && activeMode === 'feed'" class="animate-spin text-lg">⟳</span>
@@ -93,7 +97,7 @@
                  disabled:cursor-not-allowed text-white font-semibold rounded-2xl
                  py-4 text-sm transition-colors flex items-center justify-center gap-1.5
                  min-h-[56px]"
-          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS' || errorCode === 'TRANSCRIPT_PENDING'"
+          :disabled="loading || !url.trim() || errorCode === 'NO_CAPTIONS'"
           @click="submitWithMode('shadow')"
         >
           <span v-if="loading && activeMode === 'shadow'" class="animate-spin text-lg">⟳</span>
@@ -102,9 +106,9 @@
         </button>
       </div>
 
-      <!-- Retry hint for non-URL errors (not NO_CAPTIONS — retrying the same URL won't help) -->
+      <!-- Retry hint: only for transient errors, not NO_CAPTIONS or TRANSCRIPT_PENDING -->
       <button
-        v-if="errorCode && errorCode !== 'INVALID_URL' && errorCode !== 'NO_CAPTIONS'"
+        v-if="errorCode && errorCode !== 'INVALID_URL' && errorCode !== 'NO_CAPTIONS' && errorCode !== 'TRANSCRIPT_PENDING'"
         class="mt-3 w-full text-gray-400 text-sm underline"
         @click="retry"
       >
@@ -224,7 +228,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { analyzeVideo, getErrorMessage } from '@/services/api.js'
 import { getDue, getStreak } from '@/composables/useSRS.js'
 
@@ -266,6 +270,34 @@ const lastMode  = ref('feed') // preserved across error for retry()
 const dueCount = computed(() => getDue().length)
 const streak = computed(() => getStreak().streak)
 
+let pollTimer = null
+function stopPoll() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null }
+}
+onUnmounted(stopPoll)
+
+function startPoll(trimmedUrl, dest) {
+  stopPoll()
+  let attempts = 0
+  pollTimer = setInterval(async () => {
+    attempts++
+    if (attempts > 8) { stopPoll(); return } // give up after ~4 min
+    try {
+      const data = await analyzeVideo(trimmedUrl)
+      stopPoll()
+      errorCode.value = null
+      saveRecentVideo(data.video.id, data.video.title)
+      window.location.href = `${dest}?v=${data.video.id}`
+    } catch (err) {
+      if (err.error !== 'TRANSCRIPT_PENDING') {
+        stopPoll()
+        errorCode.value = err.error || 'ANALYSIS_FAILED'
+      }
+      // else keep polling
+    }
+  }, 30000)
+}
+
 const errorMessage = computed(() => {
   return errorCode.value ? getErrorMessage(errorCode.value) : ''
 })
@@ -306,12 +338,16 @@ async function submitWithMode(mode) {
 
   try {
     const data = await analyzeVideo(trimmedUrl)
+    stopPoll()
     saveRecentVideo(data.video.id, data.video.title)
     window.location.href = `${dest}?v=${data.video.id}`
   } catch (err) {
     errorCode.value = err.error || 'ANALYSIS_FAILED'
     loading.value = false
     activeMode.value = ''
+    if (err.error === 'TRANSCRIPT_PENDING') {
+      startPoll(trimmedUrl, dest)
+    }
   }
 }
 
