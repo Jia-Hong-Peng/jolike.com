@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-black text-white px-4 py-8 max-w-2xl mx-auto">
     <div class="flex items-center gap-3 mb-8">
-      <button class="text-gray-400 hover:text-white text-sm" @click="() => (window.location.href = '/')">← 首頁</button>
+      <a href="/" class="text-gray-400 hover:text-white text-sm min-h-[44px] min-w-[44px] flex items-center">← 首頁</a>
       <h1 class="text-xl font-bold">頻道訂閱管理</h1>
     </div>
 
