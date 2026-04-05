@@ -153,9 +153,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import {
   getChannels, addChannel as apiAddChannel, deleteChannel as apiDeleteChannel,
-  syncChannel, importAllChannelVideos, getChannelVideos,
+  syncChannel, importChannelVideosPage, getChannelVideos, analyzeVideo,
 } from '@/services/api.js'
-import { analyzeVideo } from '@/services/api.js'
 
 const loading  = ref(true)
 const channels = ref([])
@@ -244,15 +243,39 @@ async function rssSync(channelId) {
 async function importAll(channel) {
   channelBusy[channel.id] = 'import'
   channelResult[channel.id] = null
+
+  let page = 0
+  let totalImported = 0
+  let hasMore = true
+
   try {
-    const res = await importAllChannelVideos(channel.id)
+    while (hasMore) {
+      const res = await importChannelVideosPage(channel.id, page)
+      totalImported += res.imported ?? 0
+      hasMore = res.hasMore ?? false
+      page++
+
+      channelResult[channel.id] = {
+        ok: true,
+        msg: `掃描中... 已入庫 ${totalImported} 部${hasMore ? '，繼續掃描中' : ''}`,
+      }
+
+      // Small delay between pages to avoid hammering InnerTube
+      if (hasMore) await new Promise(r => setTimeout(r, 1000))
+    }
+
     channelResult[channel.id] = {
       ok: true,
-      msg: `✓ 已掃描 ${res.imported} 部歷史影片，請點「抓取字幕」繼續`,
+      msg: `✓ 掃描完成，共 ${totalImported} 部歷史影片已入庫，請點「抓取字幕」繼續`,
     }
     await loadChannels()
   } catch {
-    channelResult[channel.id] = { ok: false, msg: '掃描失敗，請稍後再試' }
+    channelResult[channel.id] = {
+      ok: totalImported > 0,
+      msg: totalImported > 0
+        ? `已入庫 ${totalImported} 部，掃描中途失敗，可再試一次繼續`
+        : '掃描失敗，請稍後再試',
+    }
   } finally {
     channelBusy[channel.id] = null
   }

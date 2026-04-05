@@ -181,14 +181,14 @@ export async function syncChannel(channelId) {
 }
 
 /**
- * Kick off full historical import: fetches all video IDs via InnerTube browse.
- * May take 10-30s for large channels. Returns list of video objects.
+ * Import one page (up to 300) of historical videos from InnerTube browse.
+ * Large channels require multiple calls. Use page=0,1,2... until hasMore=false.
  */
-export async function importAllChannelVideos(channelId) {
-  const res = await fetch(`${BASE}/api/channels/${channelId}?action=import-all`, { method: 'POST' })
+export async function importChannelVideosPage(channelId, page = 0) {
+  const res = await fetch(`${BASE}/api/channels/${channelId}?action=import-all&page=${page}`, { method: 'POST' })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw { error: data.error || 'IMPORT_FAILED' }
-  return data  // { imported, videos: [{id, title}] }
+  return data  // { page, imported, total_so_far, hasMore }
 }
 
 export async function getChannelVideos(channelId, { limit = 200, offset = 0 } = {}) {

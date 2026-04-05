@@ -9,7 +9,7 @@
 import { fetchChannelRss, fetchChannelVideoIds } from '../_lib/youtube.js'
 import {
   getChannel, deleteChannel,
-  saveChannelVideoStub, updateChannelVideoCount, markChannelSynced,
+  saveChannelVideoStubs, updateChannelVideoCount, markChannelSynced,
   markChannelImportDone, getChannelVideoIds,
 } from '../_lib/db.js'
 
@@ -31,7 +31,7 @@ export async function onRequest(context) {
   if (method === 'GET')    return handleGet(DB, channelId, url)
   if (method === 'DELETE') return handleDelete(DB, channelId)
   if (method === 'POST' && action === 'sync')       return handleSync(DB, channelId)
-  if (method === 'POST' && action === 'import-all') return handleImportAll(DB, channelId)
+  if (method === 'POST' && action === 'import-all') return handleImportAll(DB, channelId, url)
 
   return json({ error: 'METHOD_NOT_ALLOWED' }, 405)
 }
@@ -79,23 +79,46 @@ async function handleSync(DB, channelId) {
 }
 
 // ── POST /api/channels/:id?action=import-all ──────────────────────────────────
-// Uses InnerTube browse to get ALL historical video IDs, stores stubs in D1.
-// The admin page then calls /api/analyze for each video to fetch transcripts.
-async function handleImportAll(DB, channelId) {
+// Fetches video IDs via InnerTube browse, stores stubs in D1 via batch inserts.
+//
+// Large channels (JRE has 2000+ videos) exceed Cloudflare's 30s wall-clock limit
+// if we try to get everything at once. Solution: cap at 300 per call, support
+// ?page=N for subsequent pages. Frontend calls in a loop until hasMore = false.
+//
+// Each page fetches from InnerTube from scratch (no stored continuation token).
+// INSERT OR IGNORE means re-fetching the same videos is safe (no duplicates).
+async function handleImportAll(DB, channelId, url) {
   const channel = await getChannel(DB, channelId)
   if (!channel) return json({ error: 'NOT_FOUND' }, 404)
 
-  const allVideos = await fetchChannelVideoIds(channelId, { maxVideos: 5000 })
-
-  for (const v of allVideos) {
-    await saveChannelVideoStub(DB, { id: v.id, title: v.title, channel_id: channelId })
+  const PER_PAGE = 300
+  const page = parseInt(url.searchParams.get('page') || '0')
+  // Fetch (page+1)*PER_PAGE videos total, then slice the new page's window.
+  // InnerTube always starts from the latest, so we overfetch and slice.
+  const fetchUpTo = (page + 1) * PER_PAGE
+  let allVideos = []
+  try {
+    allVideos = await fetchChannelVideoIds(channelId, { maxVideos: fetchUpTo })
+  } catch {
+    return json({ error: 'FETCH_FAILED' }, 502)
   }
 
-  await markChannelImportDone(DB, channelId)
+  const pageVideos = allVideos.slice(page * PER_PAGE)
+  const hasMore = allVideos.length >= fetchUpTo  // might be more pages
+
+  if (pageVideos.length > 0) {
+    await saveChannelVideoStubs(DB, pageVideos.map(v => ({ ...v, channel_id: channelId })))
+  }
+
   await updateChannelVideoCount(DB, channelId)
 
+  // Mark done only when no more pages
+  if (!hasMore) await markChannelImportDone(DB, channelId)
+
   return json({
-    imported: allVideos.length,
-    videos: allVideos,
+    page,
+    imported: pageVideos.length,
+    total_so_far: allVideos.length,
+    hasMore,
   })
 }

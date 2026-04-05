@@ -196,7 +196,6 @@ export async function saveChannelVideo(DB, { id, title, duration_seconds, transc
 
 /**
  * Save a video stub (no transcript yet) from channel import.
- * Transcript will be fetched later when the video is actually needed.
  */
 export async function saveChannelVideoStub(DB, { id, title, channel_id }) {
   await DB
@@ -206,6 +205,29 @@ export async function saveChannelVideoStub(DB, { id, title, channel_id }) {
     )
     .bind(id, title ?? '', Math.floor(Date.now() / 1000), channel_id)
     .run()
+}
+
+/**
+ * Batch-insert multiple video stubs (much faster than individual inserts).
+ * Uses D1 batch() to execute up to 100 statements per round-trip.
+ * @param {D1Database} DB
+ * @param {Array<{id, title, channel_id}>} videos
+ */
+export async function saveChannelVideoStubs(DB, videos) {
+  if (videos.length === 0) return
+  const now = Math.floor(Date.now() / 1000)
+  const CHUNK = 100
+  for (let i = 0; i < videos.length; i += CHUNK) {
+    const chunk = videos.slice(i, i + CHUNK)
+    await DB.batch(
+      chunk.map(v =>
+        DB.prepare(
+          `INSERT OR IGNORE INTO videos (id, title, duration_seconds, analyzed_at, raw_transcript, channel_id)
+           VALUES (?, ?, 0, ?, '[]', ?)`
+        ).bind(v.id, v.title ?? '', now, v.channel_id)
+      )
+    )
+  }
 }
 
 /**
