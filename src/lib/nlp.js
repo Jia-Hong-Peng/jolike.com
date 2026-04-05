@@ -267,7 +267,11 @@ function learningScore(word, freq, posMult = 1.0) {
 
 export function lookupMeaning(keyword) {
   const key = keyword.toLowerCase()
-  return cedict[key] || cedict[key.replace(/-/g, ' ')] || ''
+  // Direct match first; fall back to canonical (lemmatized) form so "running" → "run"
+  return cedict[key]
+    || cedict[key.replace(/-/g, ' ')]
+    || cedict[canonicalForm(key)]
+    || ''
 }
 
 // NGSL/TSL easy English definition — used as fallback when Free Dictionary API

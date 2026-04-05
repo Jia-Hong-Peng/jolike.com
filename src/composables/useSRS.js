@@ -99,7 +99,8 @@ export function getDue() {
       // skip corrupt entries
     }
   }
-  return due
+  // Most overdue first — highest-priority review items surface first
+  return due.sort((a, b) => a.nextReview - b.nextReview)
 }
 
 /**

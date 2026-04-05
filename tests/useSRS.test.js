@@ -59,6 +59,26 @@ describe('scheduleReview', () => {
     })
     expect(() => scheduleReview(MOCK_CARD)).not.toThrow()
   })
+
+  it('T-GUARD — does not overwrite existing SRS entry (protects review progress)', () => {
+    scheduleReview(MOCK_CARD)
+    // Manually advance the entry to simulate prior review progress
+    const advanced = JSON.parse(localStorage.getItem('jolike_srs_run'))
+    advanced.interval = 14
+    advanced.reviews = 5
+    localStorage.setItem('jolike_srs_run', JSON.stringify(advanced))
+    // Calling scheduleReview again must not reset the entry
+    scheduleReview(MOCK_CARD)
+    const after = JSON.parse(localStorage.getItem('jolike_srs_run'))
+    expect(after.interval).toBe(14)
+    expect(after.reviews).toBe(5)
+  })
+
+  it('T-STREAK-LEARN — scheduleReview increments streak (learning counts toward streak)', () => {
+    scheduleReview(MOCK_CARD)
+    const { streak } = getStreak()
+    expect(streak).toBe(1)
+  })
 })
 
 describe('getDue', () => {

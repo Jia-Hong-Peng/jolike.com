@@ -18,6 +18,17 @@
       <p class="text-4xl">🏆</p>
       <p class="text-white text-xl font-bold">複習完成！</p>
       <p class="text-gray-400 text-sm">共複習 {{ dueCards.length }} 個單字</p>
+      <!-- Session score breakdown -->
+      <div class="flex gap-3 justify-center">
+        <div class="bg-green-900/50 border border-green-800 rounded-2xl px-5 py-3 text-center">
+          <p class="text-2xl font-bold text-green-400">{{ sessionKnown }}</p>
+          <p class="text-green-600 text-xs mt-0.5">記住了 ✓</p>
+        </div>
+        <div class="bg-red-900/50 border border-red-800 rounded-2xl px-5 py-3 text-center">
+          <p class="text-2xl font-bold text-red-400">{{ sessionUnsure }}</p>
+          <p class="text-red-600 text-xs mt-0.5">還不熟 😅</p>
+        </div>
+      </div>
 
       <!-- Push notification prompt (shown after first session) -->
       <div v-if="showPushPrompt" class="bg-gray-800 rounded-2xl p-5 text-left space-y-3 border border-gray-700">
@@ -177,6 +188,8 @@ const sessionComplete = ref(false)
 const showPushPrompt = ref(false)
 const phase = ref('question')   // 'question' | 'revealed'
 const dictData = ref(null)
+const sessionKnown = ref(0)
+const sessionUnsure = ref(0)
 
 const hasTTS = ref(typeof window !== 'undefined' && 'speechSynthesis' in window)
 const supportsPush = ref(typeof window !== 'undefined' && 'PushManager' in window && 'Notification' in window)
@@ -255,6 +268,8 @@ function mark(outcome) {
   const entry = currentEntry.value
   if (!entry) return
   markReview(entry.word, outcome)
+  if (outcome === 'known') sessionKnown.value++
+  else sessionUnsure.value++
   if (currentIdx.value < dueCards.value.length - 1) {
     currentIdx.value++
   } else {
