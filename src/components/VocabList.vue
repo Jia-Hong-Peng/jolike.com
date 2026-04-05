@@ -29,9 +29,9 @@
         >
           🎬 本影片
         </button>
-        <!-- Vocab list tabs -->
+        <!-- Vocab list tabs — only show lists with ≥1 match in current video -->
         <button
-          v-for="list in VOCAB_LISTS"
+          v-for="list in visibleLists"
           :key="list.id"
           class="flex-shrink-0 text-xs px-3 py-1.5 rounded-t-lg font-medium transition-colors border-b-2"
           :class="activeTab === list.id
@@ -165,11 +165,51 @@ const emit = defineEmits(['close', 'jump'])
 // ── Tab state ─────────────────────────────────────────────────────────────────
 const activeTab = ref('video')
 
-onMounted(() => {
+// Map VocabList tab IDs to getVocabCategories category keys (morphological matching)
+const LIST_TO_CAT = {
+  toeic:    'toeic',
+  ielts:    'ielts',
+  academic: 'academic',
+  advanced: 'advanced_academic',
+}
+
+// null = not yet computed; Set = computed result
+const availableListIds = ref(null)
+
+// Only show tabs that have ≥1 matching word in the current video
+const visibleLists = computed(() =>
+  availableListIds.value === null
+    ? VOCAB_LISTS
+    : VOCAB_LISTS.filter(l => availableListIds.value.has(l.id))
+)
+
+onMounted(async () => {
+  // Scroll to current card in video tab
   nextTick(() => {
-    const activeItem = document.querySelector('.vocab-list-active')
-    activeItem?.scrollIntoView({ block: 'center', behavior: 'instant' })
+    document.querySelector('.vocab-list-active')?.scrollIntoView({ block: 'center', behavior: 'instant' })
   })
+
+  // Check all lists in parallel — hide tabs with no video matches
+  const results = await Promise.all(
+    VOCAB_LISTS.map(async (list) => {
+      const catKey = LIST_TO_CAT[list.id]
+      let hasMatch
+      if (catKey) {
+        hasMatch = props.cards.some(card => getVocabCategories(card.keyword).includes(catKey))
+      } else {
+        const words = await loadWordList(list.id)
+        const wordSet = new Set(words.map(w => w.toLowerCase()))
+        hasMatch = props.cards.some(card => wordSet.has(card.keyword.toLowerCase()))
+      }
+      return { id: list.id, hasMatch }
+    })
+  )
+  availableListIds.value = new Set(results.filter(r => r.hasMatch).map(r => r.id))
+
+  // If active tab got hidden, switch back to video
+  if (activeTab.value !== 'video' && !availableListIds.value.has(activeTab.value)) {
+    activeTab.value = 'video'
+  }
 })
 
 // ── 本影片 helpers ────────────────────────────────────────────────────────────
@@ -218,14 +258,6 @@ const vocabLearnedCount = computed(() => vocabWords.value.filter(w => w.srsStatu
 async function switchTab(listId) {
   activeTab.value = listId
   await loadVocabList(listId)
-}
-
-// Map VocabList tab IDs to getVocabCategories category keys
-const LIST_TO_CAT = {
-  toeic:    'toeic',
-  ielts:    'ielts',
-  academic: 'academic',
-  advanced: 'advanced_academic',
 }
 
 async function loadVocabList(listId) {
