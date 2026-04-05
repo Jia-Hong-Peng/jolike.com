@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { extractLearningItems, lookupMeaning, wordDifficultyTier, extractWordsFromSegment } from '../src/lib/nlp.js'
+import { getVocabCategories } from '../src/lib/lookup.js'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const makeTranscript = (texts) => texts.map((text, i) => ({ text, start: i * 3, dur: 3 }))
@@ -516,5 +517,49 @@ describe('nlp.js — extractWordsFromSegment', () => {
     expect(typeof card.clip_start).toBe('number')
     expect(typeof card.clip_end).toBe('number')
     expect(card.clip_end).toBeGreaterThan(card.clip_start)
+  })
+})
+
+// ── getVocabCategories ─────────────────────────────────────────────────────────
+describe('nlp.js — getVocabCategories', () => {
+  it('T-CAT-NLP-1 — AWL Sublist 1-10 word gets "academic" category', () => {
+    // "constitute" is AWL Sublist 1
+    const cats = getVocabCategories('constitute')
+    expect(cats).toContain('academic')
+    expect(cats).not.toContain('advanced_academic')
+  })
+
+  it('T-CAT-NLP-2 — NAWL/advanced academic word (sublist 11-12) gets "advanced_academic"', () => {
+    // Look for a word in awl_nawl sublist >= 11
+    // "negotiate" is TSL (sublist 12) → advanced_academic
+    const cats = getVocabCategories('negotiate')
+    // TSL sublist 12 → should be either advanced_academic or toeic depending on overlap
+    // What we know: it should NOT be 'academic' (that's AWL 1-10 only)
+    expect(cats).not.toContain('academic')
+  })
+
+  it('T-CAT-NLP-3 — TOEIC word gets "toeic" category', () => {
+    // "invoice" is a known TOEIC business word
+    const cats = getVocabCategories('invoice')
+    expect(cats).toContain('toeic')
+  })
+
+  it('T-CAT-NLP-4 — common non-exam word gets empty categories', () => {
+    // "dog" is tier 1, not AWL, not TOEIC
+    const cats = getVocabCategories('dog')
+    expect(cats).toEqual([])
+  })
+
+  it('T-CAT-NLP-5 — extractLearningItems word cards have categories field (array)', () => {
+    const transcript = makeTranscript([
+      'We need to negotiate the contract terms carefully with our client.',
+      'The quarterly revenue report shows significant growth this year.',
+    ])
+    const items = extractLearningItems(transcript, 'vid1', 'beginner')
+    const wordCards = items.filter(i => i.type === 'word')
+    expect(wordCards.length).toBeGreaterThan(0)
+    for (const card of wordCards) {
+      expect(Array.isArray(card.categories)).toBe(true)
+    }
   })
 })

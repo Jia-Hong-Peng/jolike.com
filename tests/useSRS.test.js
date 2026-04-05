@@ -53,6 +53,18 @@ describe('scheduleReview', () => {
     expect(entry.videoId).toBe('abc123')
   })
 
+  it('T-CAT-1 — stores categories from card (array)', () => {
+    scheduleReview({ ...MOCK_CARD, categories: ['academic', 'toeic'] })
+    const entry = JSON.parse(localStorage.getItem('jolike_srs_run'))
+    expect(entry.categories).toEqual(['academic', 'toeic'])
+  })
+
+  it('T-CAT-2 — stores empty array when card has no categories', () => {
+    scheduleReview(MOCK_CARD)  // MOCK_CARD has no categories field
+    const entry = JSON.parse(localStorage.getItem('jolike_srs_run'))
+    expect(entry.categories).toEqual([])
+  })
+
   it('T12 — fails silently when localStorage throws DOMException', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('QuotaExceededError')

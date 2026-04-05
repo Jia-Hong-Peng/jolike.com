@@ -70,6 +70,48 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+// ── T-LC-TOEIC: showToeicBadge display logic ─────────────────────────────────
+
+describe('LearningCard — showToeicBadge', () => {
+  beforeEach(() => {
+    global.fetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ responseData: { translatedText: '' }, responseStatus: 200 }),
+    })
+  })
+
+  it('T-LC-TOEIC-1 — shows 多益 badge when card.categories includes "toeic"', async () => {
+    const card = makeCard({ categories: ['toeic'], awl_sublist: undefined })
+    const wrapper = mount(LearningCard, { props: { card } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('多益')
+  })
+
+  it('T-LC-TOEIC-2 — hides 多益 badge when categories does not include "toeic"', async () => {
+    const card = makeCard({ categories: ['academic'], awl_sublist: undefined })
+    const wrapper = mount(LearningCard, { props: { card } })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('多益')
+  })
+
+  it('T-LC-TOEIC-3 — hides 多益 badge when awl_sublist >= 12 (already shown via AWL badge)', async () => {
+    const card = makeCard({ categories: ['toeic'], awl_sublist: 12 })
+    const wrapper = mount(LearningCard, { props: { card } })
+    await flushPromises()
+    // showToeicBadge returns false when awl_sublist >= 12
+    // The AWL badge shows 商業英文 instead — no duplicate 多益 badge
+    const badgeSpans = wrapper.findAll('span')
+    const toeicBadge = badgeSpans.find(s => s.text() === '多益')
+    expect(toeicBadge).toBeUndefined()
+  })
+
+  it('T-LC-TOEIC-4 — no 多益 badge when categories is undefined', async () => {
+    const card = makeCard({ categories: undefined, awl_sublist: undefined })
+    const wrapper = mount(LearningCard, { props: { card } })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('多益')
+  })
+})
+
 // ── T-LC-1: generation guard prevents stale data on fast card switch ──────────
 
 describe('LearningCard — loadCardData race condition', () => {
