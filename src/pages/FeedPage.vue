@@ -197,7 +197,8 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import LearningCard from '@/components/LearningCard.vue'
 import ActionBar from '@/components/ActionBar.vue'
 import VocabList from '@/components/VocabList.vue'
-import { getVideo } from '@/services/api.js'
+import { getVideo, postVocabIndex } from '@/services/api.js'
+import { scanTranscriptVocab } from '@/lib/vocabScan.js'
 import { useLearningSession } from '@/composables/useLearningSession.js'
 import { scheduleReview, getDue, getKnownWords } from '@/composables/useSRS.js'
 
@@ -274,6 +275,11 @@ onMounted(async () => {
     } else {
       cards.value = items
     }
+
+    // Background: scan full transcript against all vocab lists and store index
+    scanTranscriptVocab(data.transcript).then(vocab => {
+      postVocabIndex(videoId, vocab)
+    }).catch(() => { /* non-critical */ })
   } catch (err) {
     error.value = err.message || '載入失敗，請確認網路連線'
   } finally {

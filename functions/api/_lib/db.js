@@ -111,3 +111,52 @@ export async function softDeleteVideo(DB, id) {
     .bind(Math.floor(Date.now() / 1000), id)
     .run()
 }
+
+// ── video_vocab ────────────────────────────────────────────────────────────────
+
+/**
+ * Save vocabulary index for a video (upsert per list).
+ * @param {D1Database} DB
+ * @param {string} videoId
+ * @param {Record<string, string[]>} vocab - { list_id: [word, ...] }
+ */
+export async function saveVocabIndex(DB, videoId, vocab) {
+  const indexed_at = Math.floor(Date.now() / 1000)
+  const statements = Object.entries(vocab).map(([list_id, words]) =>
+    DB.prepare(
+      'INSERT OR REPLACE INTO video_vocab (video_id, list_id, words, indexed_at) VALUES (?, ?, ?, ?)'
+    ).bind(videoId, list_id, JSON.stringify(words), indexed_at)
+  )
+  if (statements.length > 0) await DB.batch(statements)
+}
+
+/**
+ * Get all videos that contain a specific word in a vocab list.
+ * Loads all rows for the list then filters by word in application code.
+ * @param {D1Database} DB
+ * @param {string} listId
+ * @param {string} word - canonical word to search
+ * @returns {Promise<Array<{id, title}>>}
+ */
+export async function getVideosForWord(DB, listId, word) {
+  const { results } = await DB
+    .prepare(`
+      SELECT v.id, v.title, vv.words
+      FROM video_vocab vv
+      JOIN videos v ON v.id = vv.video_id
+      WHERE vv.list_id = ?
+        AND v.deleted_at IS NULL
+      ORDER BY v.analyzed_at DESC
+    `)
+    .bind(listId)
+    .all()
+
+  const lw = word.toLowerCase()
+  return (results ?? [])
+    .filter(row => {
+      try {
+        return JSON.parse(row.words).some(w => w.toLowerCase() === lw)
+      } catch { return false }
+    })
+    .map(row => ({ id: row.id, title: row.title }))
+}

@@ -113,6 +113,43 @@ export async function deleteLibraryVideo(videoId, adminToken) {
 }
 
 /**
+ * POST /api/video-vocab
+ * Store vocabulary index for a video (called after client-side transcript scan).
+ *
+ * @param {string} videoId
+ * @param {Record<string, string[]>} vocab - { list_id: [word, ...] }
+ */
+export async function postVocabIndex(videoId, vocab) {
+  try {
+    await fetch(`${BASE}/api/video-vocab`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_id: videoId, vocab }),
+    })
+  } catch {
+    // Non-critical: fire-and-forget, don't block user
+  }
+}
+
+/**
+ * GET /api/vocab-videos?list=X&word=Y
+ * Return videos containing a specific word from a vocab list.
+ *
+ * @param {string} listId
+ * @param {string} word
+ * @returns {Promise<Array<{id, title}>>}
+ */
+export async function getVocabVideos(listId, word) {
+  try {
+    const res = await fetch(`${BASE}/api/vocab-videos?list=${encodeURIComponent(listId)}&word=${encodeURIComponent(word)}`)
+    const data = await res.json().catch(() => ({}))
+    return data.videos ?? []
+  } catch {
+    return []
+  }
+}
+
+/**
  * Map API error codes to user-facing messages.
  * @param {string} errorCode
  * @returns {string}

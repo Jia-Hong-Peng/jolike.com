@@ -164,6 +164,27 @@
               }"
             >{{ { learning: '學習中', familiar: '熟悉', mastered: '精通' }[currentCard._srsStatus] }}</span>
           </div>
+
+          <!-- Related videos from vocab index -->
+          <div v-if="relatedVideos.length > 0" class="mt-4 pt-3 border-t border-gray-800">
+            <p class="text-gray-500 text-xs mb-2">📹 出現在這些影片中</p>
+            <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              <a
+                v-for="v in relatedVideos"
+                :key="v.id"
+                :href="`/feed/?v=${v.id}`"
+                class="flex-shrink-0 flex flex-col gap-1"
+              >
+                <img
+                  :src="`https://img.youtube.com/vi/${v.id}/default.jpg`"
+                  :alt="v.title"
+                  class="w-24 h-[54px] object-cover rounded-lg bg-gray-800"
+                  loading="lazy"
+                />
+                <p class="text-gray-500 text-xs w-24 leading-snug line-clamp-2">{{ v.title || v.id }}</p>
+              </a>
+            </div>
+          </div>
         </div>
 
         <!-- Controls -->
@@ -201,6 +222,7 @@ import { useLearningSession } from '@/composables/useLearningSession.js'
 import { scheduleReview, getDue } from '@/composables/useSRS.js'
 import { lookupDefinition } from '@/composables/useDictionary.js'
 import { useTTS } from '@/composables/useTTS.js'
+import { getVocabVideos } from '@/services/api.js'
 
 // ── URL param ─────────────────────────────────────────────────────────────────
 const listId = new URLSearchParams(window.location.search).get('list') || ''
@@ -264,6 +286,18 @@ function startList(id) {
   window.location.href = `/vocab-study/?list=${id}`
 }
 
+// ── Related videos from vocab index ───────────────────────────────────────────
+const relatedVideos = ref([])
+
+async function loadRelatedVideos() {
+  if (!currentCard.value || !listId) { relatedVideos.value = []; return }
+  try {
+    relatedVideos.value = await getVocabVideos(listId, currentCard.value.keyword)
+  } catch {
+    relatedVideos.value = []
+  }
+}
+
 // ── Dictionary lookup ─────────────────────────────────────────────────────────
 const dictData      = ref(null)
 const fallbackMeaning = ref('')
@@ -310,8 +344,14 @@ async function loadCardData() {
 watch(() => currentCard.value?.id, () => {
   generation++
   loadCardData()
+  loadRelatedVideos()
 })
-onMounted(() => { if (listId) loadCardData() })
+onMounted(() => {
+  if (listId) {
+    loadCardData()
+    loadRelatedVideos()
+  }
+})
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
 const { hasTTS, speak } = useTTS()
