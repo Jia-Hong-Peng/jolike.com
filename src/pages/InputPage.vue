@@ -207,7 +207,7 @@ const errorCode = ref(null)
 const activeMode = ref('')   // 'feed' | 'shadow'
 const lastMode  = ref('feed') // preserved across error for retry()
 const dueCount = computed(() => getDue().length)
-const { streak } = getStreak()
+const streak = computed(() => getStreak().streak)
 
 const errorMessage = computed(() => {
   return errorCode.value ? getErrorMessage(errorCode.value) : ''

@@ -200,6 +200,7 @@ import HighlightedSentence from '@/components/HighlightedSentence.vue'
 import { getDue, markReview } from '@/composables/useSRS.js'
 import { subscribePush, isPushEnabled } from '@/composables/usePWA.js'
 import { lookupDefinition } from '@/composables/useDictionary.js'
+import { useTTS } from '@/composables/useTTS.js'
 
 const loading = ref(true)
 const dueCards = ref([])
@@ -211,7 +212,7 @@ const dictData = ref(null)
 const sessionKnown = ref(0)
 const sessionUnsure = ref(0)
 
-const hasTTS = ref(typeof window !== 'undefined' && 'speechSynthesis' in window)
+const { hasTTS, speak } = useTTS()
 const supportsPush = ref(typeof window !== 'undefined' && 'PushManager' in window && 'Notification' in window)
 
 onMounted(async () => {
@@ -256,21 +257,6 @@ function intervalLabel(days) {
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
-function speak(word) {
-  if (!hasTTS.value) return
-  const u = new SpeechSynthesisUtterance(word)
-  u.lang = 'en-US'
-  u.rate = 1.0
-  const voices = window.speechSynthesis.getVoices()
-  const enUS = voices.filter(v => v.lang === 'en-US' || v.lang === 'en_US')
-  const best = enUS.find(v => /google|neural|enhanced/i.test(v.name))
-    || enUS.find(v => !v.localService)
-    || enUS[0]
-  if (best) u.voice = best
-  window.speechSynthesis.cancel()
-  window.speechSynthesis.speak(u)
-}
-
 function reveal() {
   phase.value = 'revealed'
 }

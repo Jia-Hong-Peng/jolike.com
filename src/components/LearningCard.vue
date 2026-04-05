@@ -108,6 +108,7 @@ import { computed, ref, watch, onMounted } from 'vue'
 import VideoClip from './VideoClip.vue'
 import HighlightedSentence from './HighlightedSentence.vue'
 import { lookupDefinition } from '@/composables/useDictionary.js'
+import { useTTS } from '@/composables/useTTS.js'
 
 const props = defineProps({
   card: {
@@ -131,23 +132,7 @@ const keywordMeaning  = ref('')
 const dictData        = ref(null)  // { phonetic, partOfSpeech, definition, example }
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
-const hasTTS = ref(typeof window !== 'undefined' && 'speechSynthesis' in window)
-
-function speak(word) {
-  if (!hasTTS.value) return
-  const u = new SpeechSynthesisUtterance(word)
-  u.lang = 'en-US'
-  u.rate = 1.0
-  // Pick the best available en-US voice (Google/neural > local default)
-  const voices = window.speechSynthesis.getVoices()
-  const enUS = voices.filter(v => v.lang === 'en-US' || v.lang === 'en_US')
-  const best = enUS.find(v => /google|neural|enhanced/i.test(v.name))
-    || enUS.find(v => !v.localService)
-    || enUS[0]
-  if (best) u.voice = best
-  window.speechSynthesis.cancel()
-  window.speechSynthesis.speak(u)
-}
+const { hasTTS, speak } = useTTS()
 
 function onTTSClick() {
   // Speak the base form (lemma) for correct dictionary pronunciation;

@@ -266,7 +266,7 @@ function readAllEntries() {
   return entries
 }
 
-const { streak } = getStreak()
+const streak = computed(() => getStreak().streak)
 
 const totalWords    = computed(() => allEntries.value.length)
 const dueCount      = computed(() => { const now = Date.now(); return allEntries.value.filter(e => e.nextReview <= now).length })
@@ -357,6 +357,7 @@ function stageClass(entry) {
 }
 
 function nextReviewText(entry) {
+  const now = Date.now()
   const ms = entry.nextReview - now
   if (ms <= 0) return '待複習'
   const days = Math.floor(ms / MS_PER_DAY)

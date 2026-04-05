@@ -255,9 +255,10 @@ onMounted(async () => {
     const data = await getVideo(videoId)
     transcript.value = data.transcript
     const { extractLearningItems } = await import('@/lib/nlp.js')
-    const items = extractLearningItems(data.transcript, videoId, level.value, getKnownWords())
+    const knownWords = getKnownWords()
+    const items = extractLearningItems(data.transcript, videoId, level.value, knownWords)
     if (items.length === 0) {
-      if (getKnownWords().size > 0) {
+      if (knownWords.size > 0) {
         allMastered.value = true
       } else {
         error.value = '無法從字幕中提取學習內容，請換一支影片'
@@ -354,11 +355,12 @@ watch(level, async (newLevel) => {
   localStorage.setItem('jolike_level', newLevel)
   if (transcript.value.length === 0) return
   const { extractLearningItems } = await import('@/lib/nlp.js')
-  const items = extractLearningItems(transcript.value, videoId, newLevel, getKnownWords())
+  const knownWords = getKnownWords()
+  const items = extractLearningItems(transcript.value, videoId, newLevel, knownWords)
   if (items.length > 0) {
     cards.value = items
     allMastered.value = false
-  } else if (getKnownWords().size > 0) {
+  } else if (knownWords.size > 0) {
     allMastered.value = true
   }
   jumpTo(0)
