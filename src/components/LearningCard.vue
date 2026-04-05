@@ -37,6 +37,14 @@
         >
           {{ awlBadgeLabel }}
         </span>
+        <!-- TOEIC badge — shown for business vocab not already tagged by AWL/TSL -->
+        <span
+          v-if="showToeicBadge"
+          class="text-xs px-2 py-1 rounded-full font-bold bg-emerald-900/60 text-emerald-300 border border-emerald-700"
+          title="TOEIC 多益商業詞彙"
+        >
+          多益
+        </span>
         <span
           v-if="card.frequency > 1"
           class="text-xs px-2 py-1 rounded-full font-medium"
@@ -109,6 +117,7 @@ import VideoClip from './VideoClip.vue'
 import HighlightedSentence from './HighlightedSentence.vue'
 import { lookupDefinition } from '@/composables/useDictionary.js'
 import { useTTS } from '@/composables/useTTS.js'
+import { getVocabCategories } from '@/lib/lookup.js'
 
 const props = defineProps({
   card: {
@@ -307,5 +316,12 @@ const awlBadgeClass = computed(() => {
   if (s <= 10) return 'bg-stone-800 text-stone-400 border border-stone-600'      // AWL 8-10: muted = useful
   if (s === 11) return 'bg-indigo-900/60 text-indigo-300 border border-indigo-700' // NAWL: indigo = modern academic
   return 'bg-cyan-900/60 text-cyan-300 border border-cyan-700'                    // TSL: cyan = business/TOEIC
+})
+
+// TOEIC badge: show only when word is in toeic_vocab and NOT already covered by AWL badge (TSL sublist ≥12)
+const showToeicBadge = computed(() => {
+  if ((props.card.awl_sublist ?? 0) >= 12) return false  // already shown as 商業英文 via AWL badge
+  const cats = getVocabCategories(props.card.lemma || props.card.keyword)
+  return cats.includes('toeic')
 })
 </script>

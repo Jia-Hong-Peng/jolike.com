@@ -21,11 +21,13 @@ import awlWords      from '@/data/coca5000.json'
 import awlNawlData   from '@/data/awl_nawl.json'
 import cedict        from '@/data/cedict.json'
 import cefrVocab     from '@/data/cefr_vocab.json'
+import toeicVocab    from '@/data/toeic_vocab.json'
 
 // Primary: CEFR-J + Octanove vocabulary profile
 const cefrMap    = cefrVocab
 const awlNawlMap = awlNawlData
 const awlSet     = new Set(awlWords.map(w => w.toLowerCase()))
+const toeicSet   = new Set(Object.keys(toeicVocab).map(w => w.toLowerCase()))
 
 // ── Morphological stem generation ─────────────────────────────────────────────
 export function morphStems(w) {
@@ -112,6 +114,26 @@ export function awlSublist(word) {
     if (awlNawlMap[stem] !== undefined) return awlNawlMap[stem]
   }
   return 0
+}
+
+// ── Vocabulary category tags ──────────────────────────────────────────────────
+// Returns array of category strings for a word.
+// Categories: 'academic' (AWL 1-10), 'advanced_academic' (AWL 11-12), 'toeic'
+export function getVocabCategories(word) {
+  const w = word.toLowerCase()
+  const cats = []
+
+  // AWL sublist check (includes morph stems)
+  const sub = awlSublist(w)
+  if (sub >= 1 && sub <= 10)   cats.push('academic')
+  else if (sub >= 11)           cats.push('advanced_academic')
+
+  // TOEIC business vocabulary check
+  const inToeic = toeicSet.has(w)
+    || morphStems(w).some(s => toeicSet.has(s))
+  if (inToeic) cats.push('toeic')
+
+  return cats
 }
 
 // ── Difficulty tier (CEFR-based) ──────────────────────────────────────────────

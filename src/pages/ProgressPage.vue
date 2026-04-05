@@ -136,10 +136,10 @@
 
       <!-- ── Word list ──────────────────────────────────────────────────────── -->
       <div class="bg-gray-900 rounded-2xl p-5 space-y-4">
-        <div class="flex items-center justify-between">
+        <div class="space-y-2">
           <h2 class="text-white font-semibold text-sm uppercase tracking-wider">我的單字庫</h2>
-          <div class="flex gap-2">
-            <!-- Stage filter tabs -->
+          <!-- Stage filter tabs -->
+          <div class="flex flex-wrap gap-1.5">
             <button
               v-for="f in filters"
               :key="f.key"
@@ -174,13 +174,21 @@
             class="flex items-center gap-3 py-2.5 border-b border-gray-800 last:border-0"
           >
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
+              <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="text-white font-semibold text-sm">{{ entry.word }}</span>
                 <span
                   class="text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0"
                   :class="stageClass(entry)"
                 >
                   {{ stageName(entry) }}
+                </span>
+                <span
+                  v-for="cat in (entry.categories || [])"
+                  :key="cat"
+                  class="text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0"
+                  :class="categoryBadgeClass(cat)"
+                >
+                  {{ categoryLabel(cat) }}
                 </span>
               </div>
               <p v-if="entry.meaning_zh" class="text-gray-500 text-xs mt-0.5 truncate">{{ entry.meaning_zh }}</p>
@@ -324,19 +332,27 @@ const searchQuery = ref('')
 const activeFilter = ref('all')
 const pendingDelete = ref(null)
 
+const categoryCount = (cat) => allEntries.value.filter(e => (e.categories || []).includes(cat)).length
+
 const filters = computed(() => [
-  { key: 'all',      label: `全部 (${allEntries.value.length})` },
-  { key: 'due',      label: `待複習 (${dueCount.value})` },
-  { key: 'mastered', label: `精通 (${allEntries.value.filter(e => e.interval > 30).length})` },
+  { key: 'all',              label: `全部 (${allEntries.value.length})` },
+  { key: 'due',              label: `待複習 (${dueCount.value})` },
+  { key: 'mastered',         label: `精通 (${allEntries.value.filter(e => e.interval > 30).length})` },
+  { key: 'academic',         label: `學術 (${categoryCount('academic')})` },
+  { key: 'advanced_academic',label: `進階學術 (${categoryCount('advanced_academic')})` },
+  { key: 'toeic',            label: `多益 (${categoryCount('toeic')})` },
 ])
 
 const filteredWords = computed(() => {
   const now = Date.now()
   const q = searchQuery.value.toLowerCase().trim()
+  const cat = activeFilter.value
   return allEntries.value
     .filter(e => {
-      if (activeFilter.value === 'due')      return e.nextReview <= now
-      if (activeFilter.value === 'mastered') return e.interval > 30
+      if (cat === 'due')               return e.nextReview <= now
+      if (cat === 'mastered')          return e.interval > 30
+      if (cat === 'academic' || cat === 'advanced_academic' || cat === 'toeic')
+                                       return (e.categories || []).includes(cat)
       return true
     })
     .filter(e => !q || e.word.toLowerCase().includes(q) || (e.meaning_zh || '').includes(q))
@@ -454,6 +470,18 @@ function showImportMsg(msg, error) {
   importMsg.value = msg
   importError.value = error
   setTimeout(() => { importMsg.value = '' }, 5000)
+}
+
+function categoryLabel(cat) {
+  return { academic: '學術', advanced_academic: '進階學術', toeic: '多益' }[cat] ?? cat
+}
+
+function categoryBadgeClass(cat) {
+  return {
+    academic:          'bg-indigo-900/60 text-indigo-300',
+    advanced_academic: 'bg-violet-900/60 text-violet-300',
+    toeic:             'bg-emerald-900/60 text-emerald-300',
+  }[cat] ?? 'bg-gray-700 text-gray-400'
 }
 
 function goHome() {

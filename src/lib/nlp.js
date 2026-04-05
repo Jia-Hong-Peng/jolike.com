@@ -30,7 +30,7 @@ import opalPhrasesData from '@/data/opal_phrases.json' // Oxford OPAL academic p
 // lookup.js imports the data directly; nlp.js re-uses the same implementations.
 export { morphStems, canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning } from '@/lib/lookup.js'
 export { lookupNgslDef } from '@/lib/ngsl.js'
-import { canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning } from '@/lib/lookup.js'
+import { canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, getVocabCategories } from '@/lib/lookup.js'
 
 // OPAL academic phrases: Set of Oxford Phrasal Academic Lexicon entries
 // 572 academic collocations: "as a result", "in terms of", "based on", etc.
@@ -193,6 +193,7 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     const seg = pickBestSeg(word, wordAllSegs.get(word))
     const wordTier = wordDifficultyTier(word)
     const wordAwlSub = awlSublist(canonical !== word ? canonical : word)
+    const wordCategories = getVocabCategories(canonical !== word ? canonical : word)
     words.push({
       type: 'word',
       keyword: word,                               // inflected form as heard in the video
@@ -201,6 +202,7 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
       frequency: freq,
       difficulty_tier: wordTier,
       awl_sublist: wordAwlSub > 0 ? wordAwlSub : undefined,  // 1-10=AWL sublist, 11=NAWL, undefined=none
+      categories: wordCategories,
       sentence: seg.text,
       ...getClip(seg),
     })
