@@ -19,6 +19,14 @@
     <div class="mb-10 text-center">
       <h1 class="text-3xl font-bold text-white tracking-tight">JoLike English</h1>
       <p class="text-gray-400 mt-2 text-sm">貼上 YouTube 連結，開始學英文</p>
+      <!-- Streak badge (shown when streak ≥ 1) -->
+      <div
+        v-if="streak > 0"
+        class="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-sm font-semibold"
+        :class="streak >= 7 ? 'bg-orange-900/60 text-orange-300 border border-orange-800' : 'bg-gray-900 text-yellow-400'"
+      >
+        🔥 {{ streak }} 天連續學習
+      </div>
     </div>
 
     <!-- Input form -->
@@ -191,7 +199,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { analyzeVideo, getErrorMessage } from '@/services/api.js'
-import { getDue } from '@/composables/useSRS.js'
+import { getDue, getStreak } from '@/composables/useSRS.js'
 
 const url = ref('')
 const loading = ref(false)
@@ -199,6 +207,7 @@ const errorCode = ref(null)
 const activeMode = ref('')   // 'feed' | 'shadow'
 const lastMode  = ref('feed') // preserved across error for retry()
 const dueCount = computed(() => getDue().length)
+const { streak } = getStreak()
 
 const errorMessage = computed(() => {
   return errorCode.value ? getErrorMessage(errorCode.value) : ''

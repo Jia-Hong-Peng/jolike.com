@@ -65,7 +65,7 @@ export function scheduleReview(card) {
   const existing = readEntry(key)
   if (existing) return  // never reset interval or reviews for in-progress words
   recordStreakToday()   // learning new words counts toward streak
-  writeEntry(key, {
+  const entryData = {
     word: card.keyword,
     meaning_zh: card.meaning_zh ?? '',
     videoId: card.video_id,
@@ -77,7 +77,9 @@ export function scheduleReview(card) {
     interval: 1,
     nextReview: Date.now() + MS_PER_DAY,
     reviews: 0,
-  })
+  }
+  if (card.lemma) entryData.lemma = card.lemma
+  writeEntry(key, entryData)
 }
 
 /**

@@ -210,7 +210,7 @@ watch(currentEntry, async (entry) => {
   dictData.value = null
   phase.value = 'question'
   if (entry && entry.type === 'word') {
-    dictData.value = await lookupDefinition(entry.word)
+    dictData.value = await lookupDefinition(entry.lemma || entry.word)
   }
 }, { immediate: true })
 
