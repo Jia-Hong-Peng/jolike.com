@@ -39,10 +39,16 @@
 
       <!-- Keyword + phonetic + TTS -->
       <div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
           <p class="text-2xl font-bold text-white leading-tight">
             <mark class="bg-yellow-400 text-black px-1 rounded">{{ card.keyword }}</mark>
           </p>
+          <!-- Base/dictionary form shown when keyword is an inflected form -->
+          <span
+            v-if="card.lemma"
+            class="text-sm text-gray-400 font-normal"
+            :title="`原型 (base form): ${card.lemma}`"
+          >← {{ card.lemma }}</span>
           <button
             v-if="hasTTS"
             class="flex items-center justify-center w-11 h-11 min-h-[44px] min-w-[44px] rounded-full transition-colors bg-gray-700 text-gray-300 hover:bg-gray-600"
@@ -127,7 +133,9 @@ function speak(word) {
 }
 
 function onTTSClick() {
-  speak(props.card.keyword)
+  // Speak the base form (lemma) for correct dictionary pronunciation;
+  // fall back to keyword if no lemma (already base form or unknown)
+  speak(props.card.lemma || props.card.keyword)
 }
 
 // ── Translation cache ─────────────────────────────────────────────────────────
@@ -163,7 +171,7 @@ async function loadCardData() {
   try {
     // Phase 1: dictionary + sentence translation (parallel, independent)
     const [dict, sentence] = await Promise.all([
-      props.card.type === 'word' ? lookupDefinition(props.card.keyword) : Promise.resolve(null),
+      props.card.type === 'word' ? lookupDefinition(props.card.lemma || props.card.keyword) : Promise.resolve(null),
       props.card.sentence ? translateText(props.card.sentence) : Promise.resolve(''),
     ])
     dictData.value        = dict
@@ -174,7 +182,7 @@ async function loadCardData() {
     // Informal/slang words (e.g. "comfy") often fail direct translation.
     // Translating the English definition ("Comfortable") works much better.
     if (!props.card.meaning_zh) {
-      const source = dict?.definition?.replace(/\.$/, '') || props.card.keyword
+      const source = dict?.definition?.replace(/\.$/, '') || props.card.lemma || props.card.keyword
       const result = await translateText(source)
       // Discard identity translations (MyMemory returned the input unchanged = fail)
       if (result && result.toLowerCase() !== source.toLowerCase()) {
@@ -201,13 +209,9 @@ defineExpose({
 // ── Display computed ──────────────────────────────────────────────────────────
 const highlightedSentence = computed(() => {
   if (!props.card.sentence) return ''
-  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  // Match both canonical form ("chaperone") and original inflected form ("chaperoning")
-  const pattern = props.card.keyword_raw
-    ? `(${esc(props.card.keyword)}|${esc(props.card.keyword_raw)})`
-    : `(${esc(props.card.keyword)})`
+  const kw = props.card.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return props.card.sentence.replace(
-    new RegExp(pattern, 'gi'),
+    new RegExp(`(${kw})`, 'gi'),
     '<mark class="bg-yellow-400/30 text-yellow-300 rounded px-0.5">$1</mark>',
   )
 })

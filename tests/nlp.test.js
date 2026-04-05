@@ -65,9 +65,9 @@ describe('nlp.js — card IDs', () => {
   })
 })
 
-// ── Lemmatization (canonical keyword form) ────────────────────────────────────
-describe('nlp.js — canonical keyword form', () => {
-  it('T-LEMMA-1 — chaperoning card keyword is chaperone (not chaperoning)', () => {
+// ── Lemmatization (lemma field, keyword stays as inflected form) ──────────────
+describe('nlp.js — lemma field for base/canonical form', () => {
+  it('T-LEMMA-1 — chaperoning card keeps keyword=chaperoning, lemma=chaperone', () => {
     const items = extractLearningItems(
       makeTranscript([
         'Mom is chaperoning, like, a Coachella type of thing.',
@@ -75,26 +75,26 @@ describe('nlp.js — canonical keyword form', () => {
       ]),
       'v1', 'beginner'
     )
-    const card = items.find(i => i.keyword === 'chaperone' || i.keyword === 'chaperoning')
-    if (card) expect(card.keyword).toBe('chaperone')
+    const card = items.find(i => i.keyword === 'chaperoning')
+    if (card) expect(card.lemma).toBe('chaperone')
   })
 
-  it('T-LEMMA-2 — running card keyword is run', () => {
+  it('T-LEMMA-2 — running card keeps keyword=running, lemma=run', () => {
     const items = extractLearningItems(
       makeTranscript(['She is running towards the remarkable analysis of the situation.']),
       'v1', 'beginner'
     )
-    const card = items.find(i => i.keyword === 'run' || i.keyword === 'running')
-    if (card) expect(card.keyword).toBe('run')
+    const card = items.find(i => i.keyword === 'running')
+    if (card) expect(card.lemma).toBe('run')
   })
 
-  it('T-LEMMA-3 — analysis stays as analysis (already base form)', () => {
+  it('T-LEMMA-3 — analysis has no lemma (already base form)', () => {
     const items = extractLearningItems(
       makeTranscript(['She abandoned the project after careful analysis of the data.']),
       'v1', 'beginner'
     )
     const card = items.find(i => i.keyword === 'analysis')
-    if (card) expect(card.keyword).toBe('analysis')
+    if (card) expect(card.lemma).toBeUndefined()
   })
 })
 

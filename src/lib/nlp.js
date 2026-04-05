@@ -296,9 +296,9 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     const seg = pickBestSeg(word, wordAllSegs.get(word))
     words.push({
       type: 'word',
-      keyword: canonical,                          // base/dictionary form for display & TTS
-      keyword_raw: canonical !== word ? word : undefined,  // original inflected form for highlighting
-      meaning_zh: lookupMeaning(canonical),        // lookup with base form → better cedict hit
+      keyword: word,                               // inflected form as heard in the video
+      lemma: canonical !== word ? canonical : undefined,  // base/dictionary form (shown as supplementary)
+      meaning_zh: lookupMeaning(canonical),        // cedict/MyMemory lookup using base form
       frequency: freq,
       difficulty_tier: wordDifficultyTier(word),
       sentence: seg.text,
@@ -369,7 +369,8 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
       learningScore(b.keyword, b.frequency, posMultiplier(b.keyword)) -
       learningScore(a.keyword, a.frequency, posMultiplier(a.keyword)))
     .map((item, index) => ({
-      id: `${videoId}_${item.keyword.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
+      // ID uses lemma (canonical form) so "run" and "running" share the same SRS entry
+      id: `${videoId}_${(item.lemma || item.keyword).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
       video_id: videoId,
       sort_order: index,
       level,
