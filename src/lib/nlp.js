@@ -41,6 +41,8 @@ const STOPS_ALWAYS = new Set([
   'yeah','okay','well','like','just','also','even','still','really','already',
   'actually','very','quite','rather','much','many','most','some','more','less',
   'here','there','then','when','where','how','why','what','which',
+  // Archaic / Shakespearean forms — irregular and not worth teaching
+  'hath','doth','doeth','hast','wast','art','shalt','wilt','thy','thee','thou',
   // Apostrophe-free contractions (YouTube auto-captions omit apostrophes,
   // so "wasn't" → "wasnt". POS tagging fails on these, causing them to score
   // as tier-4 "unknown specialized" words — a false positive we must block.)
@@ -85,6 +87,7 @@ function morphStems(w) {
       stems.push(base2.slice(0, -1))    // stopped    → stop
     }
   }
+  if (w.endsWith('eth') && w.length > 5) stems.push(w.slice(0, -3))  // raineth → rain (archaic 3rd-person singular)
   if (w.endsWith('ly') && w.length > 4) stems.push(w.slice(0, -2))   // quickly → quick
   if (w.endsWith('tion') && w.length > 6) stems.push(w.slice(0, -3)) // reduction → reduc
   if (w.endsWith('ness') && w.length > 6) stems.push(w.slice(0, -4)) // darkness → dark
