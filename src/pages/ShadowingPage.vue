@@ -112,7 +112,7 @@ class="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-10
             v-for="token in segmentTokens"
             :key="token.word + token.idx"
             class="px-2.5 py-1 rounded-full text-sm font-medium transition-colors min-h-[32px]"
-            :class="savedWords.has(token.word)
+            :class="(savedWords.has(token.word) || savedWords.has(token.lemma))
               ? 'bg-orange-600 text-white'
               : (knownWords.has(token.word) || knownWords.has(token.lemma))
               ? 'border border-blue-500 bg-gray-900 text-blue-400'
