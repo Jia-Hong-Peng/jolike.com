@@ -86,9 +86,8 @@
       <!-- Summary row -->
       <div class="flex gap-3 px-4 py-2.5 text-xs text-gray-400 border-b border-gray-800 items-center">
         <span v-if="listLoading" class="animate-spin text-gray-600">⟳</span>
-        <span v-else>{{ vocabWords.length }} 個詞</span>
-        <span v-if="vocabLearnedCount > 0" class="text-teal-400">已學 {{ vocabLearnedCount }}</span>
-        <span v-if="vocabMasteredCount > 0" class="text-yellow-400">精通 {{ vocabMasteredCount }}</span>
+        <span v-else>此影片 {{ vocabWords.length }} 個詞</span>
+        <span v-if="!listLoading && vocabLearnedCount > 0" class="text-teal-400">已學 {{ vocabLearnedCount }}</span>
       </div>
 
       <!-- Loading skeleton -->
@@ -96,31 +95,41 @@
         <div v-for="i in 5" :key="i" class="w-full h-10 bg-gray-800 rounded-xl animate-pulse"></div>
       </div>
 
+      <!-- Empty state -->
+      <div v-else-if="vocabWords.length === 0" class="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center">
+        <p class="text-gray-500 text-sm">此影片沒有 {{ activeListMeta?.label }} 詞彙</p>
+        <p class="text-gray-600 text-xs mt-1">可點「學習此清單」學習完整詞彙庫</p>
+      </div>
+
       <!-- Word list -->
       <ul v-else class="flex-1 overflow-y-auto divide-y divide-gray-800">
         <li
           v-for="word in vocabWords"
           :key="word.word"
-          class="flex items-center gap-3 px-4 py-2.5 min-h-[44px]"
+          class="flex items-center gap-3 px-4 py-2.5 min-h-[44px] cursor-pointer hover:bg-gray-800 transition-colors"
+          :class="word.cardIndex === currentIndex ? 'bg-blue-900/30' : ''"
+          @click="onJump(word.cardIndex)"
         >
           <!-- SRS status icon -->
           <span class="text-sm w-5 flex-shrink-0 text-center">
-            {{ srsStatusIcon(word.status) }}
+            {{ statusIcon(word.cardId) }}
           </span>
           <!-- Word -->
-          <span class="text-white text-sm font-medium flex-1 truncate">{{ word.word }}</span>
+          <span class="text-white text-sm font-medium flex-1 truncate"
+            :class="word.cardIndex === currentIndex ? 'text-blue-300' : ''"
+          >{{ word.word }}</span>
           <!-- Meaning -->
           <span class="text-gray-600 text-xs truncate max-w-[64px] flex-shrink-0">{{ word.meaning }}</span>
           <!-- SRS label -->
           <span
-            v-if="word.status !== 'new'"
+            v-if="word.srsStatus !== 'new'"
             class="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0"
             :class="{
-              'bg-blue-900/60 text-blue-400': word.status === 'learning',
-              'bg-teal-900/60 text-teal-400': word.status === 'familiar',
-              'bg-yellow-900/60 text-yellow-400': word.status === 'mastered',
+              'bg-blue-900/60 text-blue-400': word.srsStatus === 'learning',
+              'bg-teal-900/60 text-teal-400': word.srsStatus === 'familiar',
+              'bg-yellow-900/60 text-yellow-400': word.srsStatus === 'mastered',
             }"
-          >{{ { learning: '學習中', familiar: '熟悉', mastered: '精通' }[word.status] }}</span>
+          >{{ { learning: '學習中', familiar: '熟悉', mastered: '精通' }[word.srsStatus] }}</span>
         </li>
       </ul>
 
@@ -200,12 +209,11 @@ function onJump(index) {
 
 // ── Vocab list tab ─────────────────────────────────────────────────────────────
 const listLoading = ref(false)
-const vocabWords  = ref([])  // [{ word, meaning, status }]
+const vocabWords  = ref([])  // [{ word, meaning, srsStatus, cardIndex, cardId }]
 
 const activeListMeta = computed(() => VOCAB_LISTS.find(l => l.id === activeTab.value) ?? null)
 
-const vocabLearnedCount  = computed(() => vocabWords.value.filter(w => w.status !== 'new').length)
-const vocabMasteredCount = computed(() => vocabWords.value.filter(w => w.status === 'mastered').length)
+const vocabLearnedCount = computed(() => vocabWords.value.filter(w => w.srsStatus !== 'new').length)
 
 async function switchTab(listId) {
   activeTab.value = listId
@@ -217,25 +225,23 @@ async function loadVocabList(listId) {
   vocabWords.value = []
   try {
     const words = await loadWordList(listId)
-    const STATUS_ORDER = { new: 0, learning: 1, familiar: 2, mastered: 3 }
-    vocabWords.value = words
-      .map(word => ({
-        word,
-        meaning: lookupMeaning(word),
-        status: getSrsStatus(word),
+    const wordSet = new Set(words.map(w => w.toLowerCase()))
+    // Only show cards from the current video that belong to this vocab list
+    vocabWords.value = props.cards
+      .map((card, index) => ({ card, index }))
+      .filter(({ card }) => wordSet.has(card.keyword.toLowerCase()))
+      .map(({ card, index }) => ({
+        word: card.keyword,
+        meaning: card.meaning_zh,
+        srsStatus: getSrsStatus(card.keyword),
+        cardIndex: index,
+        cardId: card.id,
       }))
-      .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
   } finally {
     listLoading.value = false
   }
 }
 
-function srsStatusIcon(status) {
-  if (status === 'mastered') return '🏆'
-  if (status === 'familiar') return '✅'
-  if (status === 'learning') return '📚'
-  return '○'
-}
 
 function studyList() {
   if (!activeListMeta.value) return
