@@ -97,6 +97,11 @@ function learningScore(word, freq, posMult = 1.0) {
   return tier * 10 + Math.log1p(freq) * posMult * cedictBoost + awlBoost
 }
 
+/** Strip inline sound-effect labels like [music] or [applause] embedded in speech. */
+function cleanText(text) {
+  return text.replace(/\[.*?\]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 function getClip(segment) {
   const clip_start = Math.max(0, segment.start - 0.5)
   const segEnd     = segment.start + Math.max(segment.dur, CLIP_MIN_S)
@@ -125,7 +130,11 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
 
   for (const segment of transcript) {
     if (!segment.text) continue
-    const doc = nlp(segment.text)
+    // Skip sound-effect labels like [groaning], [emotional music], [applause]
+    if (/^\s*\[.*\]\s*$/.test(segment.text)) continue
+    const text = cleanText(segment.text)
+    if (!text) continue
+    const doc = nlp(text)
     doc.verbs().not('#Auxiliary').out('array')
       .forEach(v => verbSet.add(v.replace(/[^a-zA-Z]/g, '').toLowerCase()))
     doc.adjectives().out('array')
@@ -203,7 +212,7 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
       difficulty_tier: wordTier,
       awl_sublist: wordAwlSub > 0 ? wordAwlSub : undefined,  // 1-10=AWL sublist, 11=NAWL, undefined=none
       categories: wordCategories,
-      sentence: seg.text,
+      sentence: cleanText(seg.text),
       ...getClip(seg),
     })
   }
@@ -224,15 +233,18 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
 
   for (const segment of transcript) {
     if (!segment.text) continue
+    if (/^\s*\[.*\]\s*$/.test(segment.text)) continue
+    const phraseText = cleanText(segment.text)
+    if (!phraseText) continue
 
     // Phrasal verbs via regex
-    const phrasalMatches = segment.text.matchAll(
+    const phrasalMatches = phraseText.matchAll(
       new RegExp(`\\b([a-zA-Z]{3,})\\s+(${PARTICLES})\\b`, 'gi')
     )
     for (const m of phrasalMatches) addPhrase(m[0], segment)
 
     // Compound nouns — no determiners, no proper noun phrases (person/place names)
-    const nounPhrases = nlp(segment.text).nouns().out('array')
+    const nounPhrases = nlp(phraseText).nouns().out('array')
     for (const np of nounPhrases) {
       const clean = np.replace(/[^a-zA-Z ]/g, '').trim()
       if (DETERMINERS.test(clean)) continue
@@ -266,7 +278,7 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
       meaning_zh: lookupMeaning(phrase),
       frequency: freq,
       difficulty_tier: Math.max(1, ...phrase.split(' ').map(w => wordDifficultyTier(w))),
-      sentence: seg.text,
+      sentence: cleanText(seg.text),
       ...getClip(seg),
     })
   }
@@ -328,7 +340,7 @@ export function extractWordsFromSegment(segment, videoId) {
       meaning_zh:      lookupMeaning(w),
       frequency:       1,
       difficulty_tier: tier,
-      sentence:        segment.text,
+      sentence:        cleanText(segment.text),
       clip_start:      +clip_start.toFixed(2),
       clip_end:        +clip_end.toFixed(2),
       sort_order:      0,
