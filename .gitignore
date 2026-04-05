@@ -31,3 +31,6 @@ coverage/
 
 # Copyright-restricted data files (do not commit)
 src/data/longman3000.json
+src/data/maximax_cefr.json
+src/data/ngsl_spoken.json
+src/data/subtlex_us.json
