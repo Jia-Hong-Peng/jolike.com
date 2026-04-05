@@ -76,6 +76,7 @@
           :end="clipEnd"
           :hide-controls="true"
           :seamless="autoplay"
+          :playback-rate="slowMode ? 0.7 : 1.0"
           @ended="onClipEnded"
         />
 
@@ -126,7 +127,7 @@ class="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-10
 
       <!-- Action area -->
       <div class="px-4 pt-2 pb-6 flex-shrink-0 space-y-2.5">
-        <!-- Top controls: Replay | Loop | 連播 -->
+        <!-- Top controls: Replay | Slow | Loop | 連播 -->
         <div class="flex gap-2">
           <!-- Replay -->
           <button
@@ -138,12 +139,25 @@ class="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-10
             <span>↺</span>
             <span>重播</span>
           </button>
+          <!-- Slow speed -->
+          <button
+            class="flex-1 py-3 rounded-2xl font-semibold text-sm min-h-[48px]
+                   flex items-center justify-center gap-1 transition-colors"
+            :class="slowMode
+              ? 'bg-teal-700 text-white hover:bg-teal-600'
+              : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+            title="慢速播放 0.7x"
+            @click="slowMode = !slowMode"
+          >
+            <span>🐢</span>
+            <span>{{ slowMode ? '0.7x' : '慢速' }}</span>
+          </button>
           <!-- Loop -->
           <button
             class="flex-1 py-3 rounded-2xl font-semibold text-sm min-h-[48px]
                    flex items-center justify-center gap-1 transition-colors"
             :class="looping
-              ? 'bg-teal-700 text-white hover:bg-teal-600'
+              ? 'bg-blue-800 text-white hover:bg-blue-700'
               : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
             @click="toggleLoop"
           >
@@ -218,6 +232,7 @@ const currentIdx   = ref(0)
 const isComplete   = ref(false)
 const looping      = ref(false)
 const autoplay     = ref(false)   // auto-advance through all segments
+const slowMode     = ref(false)   // 0.7x playback speed
 const videoRef     = ref(null)
 
 // zh translation cache: segmentIdx → translated string
