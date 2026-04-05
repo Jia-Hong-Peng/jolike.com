@@ -331,6 +331,9 @@ JoLike English
 | `/review/` | ReviewPage — SRS 間隔複習（Active Recall）|
 | `/progress/` | ProgressPage — 詞彙學習進度統計 |
 | `/library/` | LibraryPage — 全站公開影片庫 |
+| `/vocab-study/` | VocabStudyPage — 多益／雅思／托福詞彙清單學習 |
+| `/admin-channels/` | 頻道訂閱管理（Admin）|
+| `/admin-backfill/` | 詞彙索引補建（Admin）|
 
 ## 本地開發
 
@@ -338,10 +341,13 @@ JoLike English
 npm install
 npm run dev          # Vite dev server（port 5173，/api 自動 proxy 到 8788）
 
-# 初始化本地 D1（只需做一次）
+# 初始化本地 D1（只需做一次，依序執行所有 migrations）
 npx wrangler d1 execute DB --local --file=migrations/0001_schema.sql
 npx wrangler d1 execute DB --local --file=migrations/0002_push_subscriptions.sql
-npx wrangler d1 execute DB --local --file=migrations/0003_videos_soft_delete.sql
+npx wrangler d1 execute DB --local --file=migrations/0003_channels.sql
+
+# Production 上線新 migration
+npx wrangler d1 execute DB --remote --file=migrations/0003_channels.sql
 
 # 啟動 Cloudflare Pages 本地環境（需先 npm run build）
 npm run build
@@ -359,17 +365,26 @@ npx wrangler pages dev dist --d1=DB
 | `ADMIN_TOKEN` | 影片庫管理員刪除權限 token |
 | `VAPID_PRIVATE_JWK` | Web Push 私鑰 |
 | `PUSH_SEND_SECRET` | Push 發送 API 保護 |
+| `CHANNEL_SYNC_SECRET` | 頻道 RSS cron 保護 token |
 
-## 影片庫管理員功能
+**GitHub Actions Secrets（Settings → Secrets → Actions）：**
 
-管理員可刪除影片庫中的影片（軟刪除，字幕快取保留）。
+| 變數名稱 | 用途 |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare 部署用 |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 帳號 ID |
+| `PUSH_SEND_SECRET` | 每日推播 cron 驗證 |
+| `CHANNEL_SYNC_SECRET` | 每小時頻道同步 cron 驗證 |
 
-**取得 ADMIN_TOKEN 步驟：**
-1. 登入 [Cloudflare Dashboard](https://dash.cloudflare.com)
-2. 進入 Pages → jolike-english → Settings → Environment variables
-3. 找到 `ADMIN_TOKEN`（值已加密，需重設才能看到）
+---
 
-**使用方式（第一次）：**
+## Admin 功能
+
+### 影片庫管理（軟刪除）
+
+管理員可從影片庫中移除影片（軟刪除，字幕快取保留）。
+
+**啟用方式：**
 ```
 https://jolike.com/library/?admin=<ADMIN_TOKEN 的值>
 ```
@@ -378,8 +393,60 @@ https://jolike.com/library/?admin=<ADMIN_TOKEN 的值>
 **更換 token：**
 ```bash
 npx wrangler pages secret put ADMIN_TOKEN --project-name jolike-english
-# 輸入新 token 值後 Enter
 ```
+
+---
+
+### 頻道訂閱管理（`/admin-channels/`）
+
+訂閱 YouTube 頻道後，系統會自動把該頻道的影片入庫，並透過 GitHub Actions 每小時 RSS 同步更新。
+
+**操作流程：**
+
+1. 進入 `https://jolike.com/admin-channels/`
+2. 貼上頻道網址（支援格式如下），點「訂閱」
+   ```
+   https://www.youtube.com/@TED
+   https://www.youtube.com/channel/UCxxxxxx
+   @TED
+   UCxxxxxx（raw channel ID）
+   ```
+3. 訂閱後系統立即透過 RSS 匯入最近 15 部影片
+4. 點「📥 掃描全部歷史影片」→ 透過 InnerTube browse 取得所有歷史影片 ID（無需 API key）
+5. 點「🎬 抓取字幕」→ 瀏覽器逐批呼叫 `/api/analyze`，顯示進度條
+
+**自動同步：**  
+GitHub Actions cron 每小時執行，呼叫 `POST /api/channels/sync`，新影片自動入庫（儲存為 stub，無字幕）。字幕需使用者觸發或管理員手動抓取。
+
+**設定 cron secret：**
+```bash
+# Cloudflare Pages 端
+npx wrangler pages secret put CHANNEL_SYNC_SECRET --project-name jolike-english
+
+# GitHub Actions 端（相同值）
+# Settings → Secrets → Actions → New repository secret
+# Name: CHANNEL_SYNC_SECRET
+```
+
+**API 端點：**
+
+| 方法 | 路徑 | 說明 |
+|---|---|---|
+| `GET` | `/api/channels` | 列出所有訂閱頻道 |
+| `POST` | `/api/channels` | 新增頻道（body: `{ url }` ）|
+| `GET` | `/api/channels/:id` | 頻道詳情 + 影片清單 |
+| `DELETE` | `/api/channels/:id` | 取消訂閱（影片保留）|
+| `POST` | `/api/channels/:id?action=sync` | 手動 RSS 同步 |
+| `POST` | `/api/channels/:id?action=import-all` | 掃描全部歷史影片 |
+| `POST` | `/api/channels/sync` | 同步所有頻道（cron 用）|
+
+---
+
+### 詞彙索引補建（`/admin-backfill/`）
+
+對資料庫中所有舊影片（無詞彙索引）重新掃描詞彙並寫入 `video_vocab` 表，讓「相關影片」功能可正確對應單字。
+
+進入 `https://jolike.com/admin-backfill/`，點「開始補建」即可。
 
 ## D1 Migrations
 
