@@ -331,6 +331,7 @@ const filters = computed(() => [
 ])
 
 const filteredWords = computed(() => {
+  const now = Date.now()
   const q = searchQuery.value.toLowerCase().trim()
   return allEntries.value
     .filter(e => {
