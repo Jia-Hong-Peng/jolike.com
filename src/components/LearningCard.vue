@@ -177,16 +177,25 @@ async function loadCardData() {
     dictData.value        = dict
     translationText.value = sentence
 
-    // Phase 2: Chinese keyword meaning (needs dict result from phase 1)
-    // meaning_zh is '' when not in cedict (lookupMeaning returns '' not '—')
-    // Informal/slang words (e.g. "comfy") often fail direct translation.
-    // Translating the English definition ("Comfortable") works much better.
+    // Phase 2: Chinese keyword meaning (parallel: try keyword + definition, pick best)
+    // - Translating the keyword directly works for established terms (touchstone→試金石)
+    // - Translating the English definition works for informal words (comfy→Comfortable→舒適)
+    // We run both and pick the shorter non-identity result (shorter = proper term, longer = literal)
     if (!props.card.meaning_zh) {
-      const source = dict?.definition?.replace(/\.$/, '') || props.card.lemma || props.card.keyword
-      const result = await translateText(source)
-      // Discard identity translations (MyMemory returned the input unchanged = fail)
-      if (result && result.toLowerCase() !== source.toLowerCase()) {
-        keywordMeaning.value = result
+      const lemmaOrKw = props.card.lemma || props.card.keyword
+      const defText   = dict?.definition?.replace(/\.$/, '')
+      const [kwRes, defRes] = await Promise.all([
+        translateText(lemmaOrKw),
+        defText ? translateText(defText) : Promise.resolve(''),
+      ])
+      const isGood = (res, src) => res && res.toLowerCase() !== src.toLowerCase()
+      const kwGood  = isGood(kwRes, lemmaOrKw)
+      const defGood = isGood(defRes, defText || '')
+      // Prefer keyword translation when it's concise; fall back to definition translation
+      if (kwGood && (!defGood || kwRes.length <= defRes.length)) {
+        keywordMeaning.value = kwRes
+      } else if (defGood) {
+        keywordMeaning.value = defRes
       }
     }
 
