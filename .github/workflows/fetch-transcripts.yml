@@ -1,0 +1,42 @@
+name: Fetch Channel Transcripts
+
+# Why GitHub Actions and not Cloudflare Workers:
+# YouTube silently blocks Cloudflare's Singapore datacenter IPs for InnerTube requests.
+# GitHub Actions runs on GitHub/Azure IPs which YouTube does not block.
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'Channel ID or @handle (leave empty to process all channels)'
+        required: false
+        default: ''
+      limit:
+        description: 'Max stubs to process per channel'
+        required: false
+        default: '500'
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch transcripts
+        env:
+          API_BASE: https://jolike.com
+          BATCH_SECRET: ${{ secrets.BATCH_SECRET }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.channel }}" ]; then
+            ARGS="--channel ${{ github.event.inputs.channel }}"
+          fi
+          ARGS="$ARGS --limit ${{ github.event.inputs.limit }}"
+
+          node scripts/fetch-channel-transcripts.mjs $ARGS

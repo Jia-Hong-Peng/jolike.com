@@ -18,7 +18,34 @@ export async function onRequestPost(context) {
     return jsonError(400, 'INVALID_URL', '請輸入有效的 YouTube 連結')
   }
 
-  const { url } = body || {}
+  const { url, transcript: preloadedTranscript, title: preloadedTitle, duration_seconds: preloadedDuration } = body || {}
+
+  // ── Pre-fetched transcript path (GitHub Actions batch fetcher) ──────────────
+  // When transcript is provided directly, skip YouTube fetch and save immediately.
+  // Requires Bearer BATCH_SECRET to prevent abuse.
+  if (Array.isArray(preloadedTranscript) && preloadedTranscript.length > 0) {
+    const auth = request.headers.get('Authorization')
+    if (!env.BATCH_SECRET || auth !== `Bearer ${env.BATCH_SECRET}`) {
+      return jsonError(401, 'UNAUTHORIZED', '需要驗證')
+    }
+    const videoId = extractVideoId(url || '')
+    if (!videoId) return jsonError(400, 'INVALID_URL', '請輸入有效的 YouTube 連結')
+    try {
+      await upsertVideo(DB, {
+        id: videoId,
+        title: preloadedTitle || '',
+        duration_seconds: preloadedDuration || 0,
+        transcript: preloadedTranscript,
+      })
+    } catch (err) {
+      console.error('D1 save error:', err)
+    }
+    return jsonOk({
+      video: { id: videoId, title: preloadedTitle || '', duration_seconds: preloadedDuration || 0 },
+      transcript: preloadedTranscript,
+      cached: false,
+    })
+  }
 
   // Validate URL
   const videoId = extractVideoId(url || '')
