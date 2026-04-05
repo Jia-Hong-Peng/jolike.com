@@ -37,69 +37,171 @@ if (!SECRET) {
   process.exit(1)
 }
 
-// ── YouTube helpers (same logic as Worker but runs from GitHub IP) ─────────────
+// ── YouTube helpers ────────────────────────────────────────────────────────────
 
-const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+const ANDROID_UA = 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip'
+// InnerTube API key for Android client (public, rotated infrequently)
+const INNERTUBE_KEY = 'AIzaSyA8eiZmM1FaDVjRy-df2KTyQ_vz_yYM394'
 
-async function fetchTranscriptForVideo(videoId, { maxRetries = 3 } = {}) {
-  // Fetch YouTube watch page — works from GitHub IPs, not from Cloudflare datacenter IPs
-  let html
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+/**
+ * Fetch transcript via YouTube InnerTube API (Android client).
+ * This endpoint is less likely to be IP-blocked than the watch page.
+ * Falls back to watch page if InnerTube returns no captions.
+ */
+async function fetchTranscriptForVideo(videoId) {
+  // Strategy 1: InnerTube API (Android client) — typically bypasses datacenter IP blocks
+  const innertube = await fetchViaInnerTube(videoId)
+  if (innertube && !innertube.error) return innertube
+  if (innertube?.error === 'RATE_LIMITED') return innertube
+
+  // Strategy 2: Direct timedtext URL (works for manual captions, no watch page needed)
+  const direct = await fetchViaDirectTimedtext(videoId)
+  if (direct && !direct.error) return direct
+
+  // Strategy 3: Watch page (original approach, may still work for some IPs)
+  return fetchViaWatchPage(videoId)
+}
+
+async function fetchViaInnerTube(videoId) {
+  try {
+    const res = await fetch(
+      `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_KEY}&prettyPrint=false`,
+      {
+        method: 'POST',
         headers: {
-          'User-Agent': BROWSER_UA,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Cookie': 'SOCS=CAI; CONSENT=YES+cb; PREF=hl=en&gl=US',
+          'Content-Type': 'application/json',
+          'User-Agent': ANDROID_UA,
+          'X-YouTube-Client-Name': '3',
+          'X-YouTube-Client-Version': '19.09.37',
         },
-        signal: AbortSignal.timeout(10000),
-      })
-      if (res.status === 429) {
-        const retryAfter = parseInt(res.headers.get('Retry-After') || '0', 10)
-        const backoff = retryAfter > 0 ? retryAfter * 1000 : Math.min(30000, 5000 * Math.pow(2, attempt))
-        process.stdout.write(`[429 attempt=${attempt+1}/${maxRetries+1} wait=${Math.round(backoff/1000)}s] `)
-        if (attempt < maxRetries) {
-          await sleep(backoff)
-          continue
-        }
-        return { error: 'RATE_LIMITED' }
+        body: JSON.stringify({
+          videoId,
+          context: {
+            client: {
+              clientName: 'ANDROID',
+              clientVersion: '19.09.37',
+              androidSdkVersion: 30,
+              userAgent: ANDROID_UA,
+              hl: 'en',
+              gl: 'US',
+            },
+          },
+        }),
+        signal: AbortSignal.timeout(8000),
       }
-      if (!res.ok) {
-        process.stdout.write(`[http=${res.status}] `)
-        return { error: 'HTTP_ERROR', status: res.status }
-      }
-      html = await res.text()
-      break
-    } catch (err) {
-      process.stdout.write(`[fetch_err: ${err.message?.substring(0, 30)}] `)
-      if (attempt < maxRetries) {
-        await sleep(3000 * (attempt + 1))
-        continue
-      }
-      return { error: 'FETCH_ERROR' }
+    )
+    if (res.status === 429) {
+      process.stdout.write(`[innertube=429] `)
+      return { error: 'RATE_LIMITED' }
     }
-  }
+    if (!res.ok) {
+      process.stdout.write(`[innertube=${res.status}] `)
+      return { error: 'HTTP_ERROR' }
+    }
 
-  // Extract captionTracks from ytInitialPlayerResponse
-  const tracks = extractCaptionTracks(html)
-  if (!tracks || tracks.length === 0) {
-    // Log HTML length to help diagnose stripped/bot-detection pages
-    process.stdout.write(`[html=${html.length}b no_tracks] `)
-    return { error: 'NO_CAPTIONS' }
-  }
+    const data = await res.json()
+    const tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? []
+    if (tracks.length === 0) {
+      // Distinguish: video has no captions vs page didn't return player data
+      const status = data?.playabilityStatus?.status
+      if (status && status !== 'OK') {
+        process.stdout.write(`[innertube status=${status}] `)
+        return { error: 'NO_CAPTIONS' }
+      }
+      // Got OK but no tracks — might be geo-restricted or login-required
+      process.stdout.write(`[innertube ok no_tracks] `)
+      return { error: 'NO_CAPTIONS' }
+    }
 
-  const captionUrl = findEnglishCaptionUrl(tracks)
-  if (!captionUrl) {
-    const langs = tracks.map(t => t.languageCode).join(',')
-    process.stdout.write(`[tracks=${tracks.length} langs=${langs} no_en] `)
-    return { error: 'NO_ENGLISH' }
-  }
+    const captionUrl = findEnglishCaptionUrl(tracks)
+    if (!captionUrl) {
+      const langs = tracks.map(t => t.languageCode).join(',')
+      process.stdout.write(`[innertube langs=${langs} no_en] `)
+      return { error: 'NO_ENGLISH' }
+    }
 
-  // Fetch the timedtext
+    // Extract title and duration from InnerTube response
+    const title = data?.videoDetails?.title || ''
+    const durationMs = parseInt(data?.videoDetails?.lengthSeconds || '0', 10)
+
+    const timedtext = await fetchTimedtext(captionUrl)
+    if (!timedtext || timedtext.error) return timedtext ?? { error: 'TIMEDTEXT_ERROR' }
+
+    return { transcript: timedtext, title, duration_seconds: durationMs }
+  } catch (err) {
+    process.stdout.write(`[innertube_err: ${err.message?.substring(0, 30)}] `)
+    return null
+  }
+}
+
+async function fetchViaDirectTimedtext(videoId) {
+  // Try direct timedtext URL — works for manual captions, often skips IP check
+  const url = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': ANDROID_UA },
+      signal: AbortSignal.timeout(6000),
+    })
+    if (!res.ok) return null
+    const body = await res.text()
+    if (!body || body.trim().length < 10) return null
+    const transcript = parseCaptions(body)
+    if (transcript.length === 0) return null
+    process.stdout.write(`[direct_tt ok] `)
+    return { transcript, title: '', duration_seconds: 0 }
+  } catch {
+    return null
+  }
+}
+
+async function fetchViaWatchPage(videoId) {
+  const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        'User-Agent': BROWSER_UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cookie': 'SOCS=CAI; CONSENT=YES+cb; PREF=hl=en&gl=US',
+      },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (res.status === 429) {
+      process.stdout.write(`[watchpage=429] `)
+      return { error: 'RATE_LIMITED' }
+    }
+    if (!res.ok) {
+      process.stdout.write(`[watchpage=${res.status}] `)
+      return { error: 'HTTP_ERROR' }
+    }
+    const html = await res.text()
+    const tracks = extractCaptionTracks(html)
+    if (!tracks || tracks.length === 0) {
+      process.stdout.write(`[watchpage html=${html.length}b no_tracks] `)
+      return { error: 'NO_CAPTIONS' }
+    }
+    const captionUrl = findEnglishCaptionUrl(tracks)
+    if (!captionUrl) {
+      const langs = tracks.map(t => t.languageCode).join(',')
+      process.stdout.write(`[watchpage langs=${langs} no_en] `)
+      return { error: 'NO_ENGLISH' }
+    }
+    const timedtext = await fetchTimedtext(captionUrl)
+    if (!timedtext || timedtext.error) return timedtext ?? { error: 'TIMEDTEXT_ERROR' }
+    const title = extractTitle(html)
+    const duration = extractDuration(html)
+    process.stdout.write(`[watchpage ok] `)
+    return { transcript: timedtext, title, duration_seconds: duration }
+  } catch (err) {
+    process.stdout.write(`[watchpage_err: ${err.message?.substring(0, 30)}] `)
+    return { error: 'FETCH_ERROR' }
+  }
+}
+
+async function fetchTimedtext(captionUrl) {
   try {
     const res = await fetch(captionUrl, {
-      headers: { 'User-Agent': BROWSER_UA },
+      headers: { 'User-Agent': ANDROID_UA },
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) {
@@ -110,14 +212,9 @@ async function fetchTranscriptForVideo(videoId, { maxRetries = 3 } = {}) {
     if (!body) return { error: 'EMPTY_TIMEDTEXT' }
     const transcript = parseCaptions(body)
     if (transcript.length === 0) return { error: 'EMPTY_PARSE' }
-
-    // Extract title and duration from ytInitialPlayerResponse
-    const title = extractTitle(html)
-    const duration = extractDuration(html)
-
-    return { transcript, title, duration_seconds: duration }
+    return transcript
   } catch (err) {
-    process.stdout.write(`[timedtext_err: ${err.message?.substring(0,30)}] `)
+    process.stdout.write(`[timedtext_err: ${err.message?.substring(0, 30)}] `)
     return { error: 'TIMEDTEXT_FETCH_ERROR' }
   }
 }
