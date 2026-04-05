@@ -307,7 +307,7 @@ async function fetchTranscripts(channel) {
 
   transcriptProgress[channel.id] = { done: 0, total: videos.length, skipped: 0, errors: 0, log: '' }
 
-  // Process one at a time with delay — batching hammers YouTube and triggers rate limiting
+  // Process one at a time — batching hammers YouTube and triggers IP-level rate limiting
   for (const v of videos) {
     if (channelBusy[channel.id] !== 'transcripts') break  // cancelled
 
@@ -319,15 +319,22 @@ async function fetchTranscripts(channel) {
       if (e?.error === 'NO_CAPTIONS') {
         // Genuinely no English captions — stub was deleted server-side
         transcriptProgress[channel.id].skipped++
-      } else {
-        // Network / rate-limit error — stub stays in D1, can retry later
+        transcriptProgress[channel.id].done++
+      } else if (e?.error === 'RATE_LIMITED') {
+        // YouTube blocked us — pause 30s then continue (stub stays for retry)
+        transcriptProgress[channel.id].log = '⏸ YouTube 速率限制，等待 30 秒...'
         transcriptProgress[channel.id].errors++
+        transcriptProgress[channel.id].done++
+        await new Promise(r => setTimeout(r, 30000))
+      } else {
+        // Other network error — stub stays in D1, can retry later
+        transcriptProgress[channel.id].errors++
+        transcriptProgress[channel.id].done++
       }
-      transcriptProgress[channel.id].done++
     }
 
-    // 1s gap between videos to stay under YouTube's rate limit
-    await new Promise(r => setTimeout(r, 1000))
+    // Jitter delay 1–2.5s to avoid fixed-interval detection
+    await new Promise(r => setTimeout(r, 1000 + Math.random() * 1500))
   }
 
   const prog = transcriptProgress[channel.id]

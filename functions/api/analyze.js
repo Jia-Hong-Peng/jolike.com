@@ -49,6 +49,9 @@ export async function onRequestPost(context) {
     isStub ? Promise.resolve(cached.title || '') : fetchOEmbedTitle(videoId),
   ])
 
+  if (result.error === 'RATE_LIMITED') {
+    return jsonError(429, 'RATE_LIMITED', 'YouTube 請求過於頻繁，請稍後再試')
+  }
   if (result.error === 'NO_CAPTIONS') {
     // Stub with no English captions — remove it so it doesn't clutter the library
     if (isStub) await deleteVideo(DB, videoId).catch(() => {})

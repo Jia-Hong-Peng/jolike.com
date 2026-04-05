@@ -463,6 +463,7 @@ async function fetchTranscriptViaAndroid(videoId) {
       }),
       signal: AbortSignal.timeout(8000),
     })
+    if (res.status === 429) return { error: 'RATE_LIMITED' }
     if (!res.ok) return null
     const data = await res.json()
     tracks = data?.captions?.playerCaptionsTracklistRenderer?.captionTracks
