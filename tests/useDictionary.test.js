@@ -39,6 +39,18 @@ describe('useDictionary — localStorage cache', () => {
     expect(stored).toBe('null')  // explicit null cached
   })
 
+  it('T-DIC-3b — does not re-fetch when null is cached (regression: cache sentinel was broken)', async () => {
+    // First call: 404 → caches null sentinel ("null" string in localStorage)
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({ ok: false, status: 404 })
+    await lookupDefinition('xyzzy')
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+
+    // Second call: must read from cache, NOT call fetch again
+    const result2 = await lookupDefinition('xyzzy')
+    expect(result2).toBeNull()
+    expect(fetchSpy).toHaveBeenCalledTimes(1)  // still 1, not 2
+  })
+
   it('T-DIC-4 — caches valid result to localStorage', async () => {
     const mockEntry = [{
       phonetics: [{ text: '/wɜːrd/' }],

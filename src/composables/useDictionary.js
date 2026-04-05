@@ -11,10 +11,17 @@ const PREFIX = 'jolike_dict_'
 
 function fromCache(word) {
   try {
+    // localStorage.getItem returns JS null (not the string "null") when the key is absent.
+    // JSON.stringify(null) = "null", so a stored "not found" sentinel is the string "null",
+    // which localStorage.getItem returns as the truthy string "null". We can distinguish:
+    //   raw === null   → key not in cache → return undefined (triggers fetch)
+    //   raw === "null" → cached as "not found" → return null (skip fetch)
+    //   raw = JSON     → cached result → return parsed object
     const raw = localStorage.getItem(PREFIX + word.toLowerCase())
-    return raw ? JSON.parse(raw) : null
+    if (raw === null) return undefined  // not in cache
+    return JSON.parse(raw)             // null = cached "not found", object = cached hit
   } catch {
-    return null
+    return undefined  // parse error → treat as cache miss
   }
 }
 
@@ -36,7 +43,7 @@ export async function lookupDefinition(word) {
   if (!clean || clean.includes(' ')) return null  // skip phrases
 
   const cached = fromCache(clean)
-  if (cached !== null) return cached
+  if (cached !== undefined) return cached  // null = cached "not found", object = cached hit
 
   try {
     const res = await fetch(
