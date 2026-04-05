@@ -69,25 +69,31 @@ export async function fetchTranscript(videoId) {
   // Fallback: if watch-page extraction fails (bot detection / changed HTML structure),
   // try the direct timedtext API which works without parsing the watch page.
   let captionUrl
+  let captionBody  // may already be populated by the direct fallback (avoids re-fetch)
   if (tracks && tracks.length > 0) {
     captionUrl = findEnglishCaptionUrl(tracks)
   }
   if (!captionUrl) {
-    captionUrl = await findEnglishCaptionUrlDirect(videoId)
+    const direct = await findEnglishCaptionUrlDirect(videoId)
+    if (direct) {
+      captionUrl = direct.url
+      captionBody = direct.body  // already fetched during probing — reuse it
+    }
   }
   if (!captionUrl) return { error: 'NO_CAPTIONS' }
 
-  // Step 4: fetch the caption XML/JSON
-  let captionBody
-  try {
-    const res = await fetch(captionUrl, {
-      headers: { 'User-Agent': BROWSER_UA },
-      signal: AbortSignal.timeout(6000),
-    })
-    if (!res.ok) return { error: 'NO_CAPTIONS' }
-    captionBody = await res.text()
-  } catch {
-    return { error: 'NETWORK_ERROR' }
+  // Step 4: fetch the caption XML/JSON (skip if body already obtained in step 3)
+  if (!captionBody) {
+    try {
+      const res = await fetch(captionUrl, {
+        headers: { 'User-Agent': BROWSER_UA },
+        signal: AbortSignal.timeout(6000),
+      })
+      if (!res.ok) return { error: 'NO_CAPTIONS' }
+      captionBody = await res.text()
+    } catch {
+      return { error: 'NETWORK_ERROR' }
+    }
   }
 
   const transcript = parseCaptions(captionBody)
@@ -161,9 +167,10 @@ function findEnglishCaptionUrl(tracks) {
  * Fallback: probe the direct timedtext API when watch-page extraction fails.
  * YouTube's timedtext endpoint accepts language code directly and doesn't require
  * parsing ytInitialPlayerResponse. Tries en, en-US, and auto-generated (kind=asr).
- * Returns a ready-to-fetch caption URL, or null if none found.
+ * Returns { url, body } for the first working track, or null if none found.
+ * The body is the already-fetched caption text so the caller avoids re-fetching.
  * @param {string} videoId
- * @returns {Promise<string|null>}
+ * @returns {Promise<{ url: string, body: string } | null>}
  */
 async function findEnglishCaptionUrlDirect(videoId) {
   const candidates = [
@@ -183,7 +190,7 @@ async function findEnglishCaptionUrlDirect(videoId) {
       // Non-empty JSON with events means the track exists and has content
       if (text && text.length > 10 && text.trimStart().startsWith('{')) {
         const data = JSON.parse(text)
-        if (data?.events?.length > 0) return url
+        if (data?.events?.length > 0) return { url, body: text }
       }
     } catch {
       // try next candidate
