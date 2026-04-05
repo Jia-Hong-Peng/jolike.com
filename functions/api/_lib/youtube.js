@@ -570,13 +570,17 @@ async function fetchTranscriptViaWatchPage(videoId) {
       headers: WATCH_PAGE_HEADERS,
       signal: AbortSignal.timeout(8000),
     })
+    console.log(`[watchpage] ${videoId} status=${res.status} content-type=${res.headers.get('content-type')}`)
     if (!res.ok) return { error: 'NO_CAPTIONS' }
     html = await res.text()
-  } catch {
+    console.log(`[watchpage] ${videoId} html_len=${html.length} has_captionTracks=${html.includes('"captionTracks"')} has_ytInitial=${html.includes('ytInitialPlayerResponse')}`)
+  } catch (e) {
+    console.log(`[watchpage] ${videoId} fetch threw: ${e.message}`)
     return { error: 'NETWORK_ERROR' }
   }
 
   const tracks = extractCaptionTracks(html)
+  console.log(`[watchpage] ${videoId} tracks_found=${tracks?.length ?? 0}`)
   if (!tracks || tracks.length === 0) return { error: 'NO_CAPTIONS' }
 
   const captionUrl = findEnglishCaptionUrl(tracks)
