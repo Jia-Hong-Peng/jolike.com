@@ -49,16 +49,21 @@ if not SECRET:
 
 # ── API helpers ────────────────────────────────────────────────────────────────
 
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Accept': 'application/json',
+}
+
 def api_get(path):
     url = f"{API_BASE}{path}"
-    req = urllib.request.Request(url)
+    req = urllib.request.Request(url, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=15) as res:
         return json.loads(res.read())
 
 def api_post(path, data, auth=None):
     url = f"{API_BASE}{path}"
     body = json.dumps(data).encode()
-    req = urllib.request.Request(url, data=body, method='POST')
+    req = urllib.request.Request(url, data=body, method='POST', headers=HEADERS)
     req.add_header('Content-Type', 'application/json')
     if auth:
         req.add_header('Authorization', f'Bearer {auth}')
