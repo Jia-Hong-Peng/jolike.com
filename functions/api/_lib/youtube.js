@@ -446,12 +446,17 @@ async function fetchTranscriptViaAndroid(videoId) {
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': ANDROID_UA,
+        // Force English locale so YouTube returns English caption tracks
+        // even when the request originates from a non-English-speaking region.
+        'Accept-Language': 'en-US,en;q=0.9',
       },
       body: JSON.stringify({
         context: {
           client: {
             clientName: 'ANDROID',
             clientVersion: ANDROID_CLIENT_VERSION,
+            hl: 'en',   // UI language → English caption tracks
+            gl: 'US',   // region → avoids region-locked caption restrictions
           },
         },
         videoId,
@@ -572,14 +577,27 @@ function extractCaptionTracks(html) {
 
 function findEnglishCaptionUrl(tracks) {
   const priority = [
-    t => t.languageCode === 'en' && t.kind !== 'asr',      // manual English
-    t => t.languageCode === 'en',                             // auto-generated English
-    t => t.languageCode === 'en-US',                          // en-US variant
-    t => typeof t.languageCode === 'string' && t.languageCode.startsWith('en'),
+    t => t.languageCode === 'en' && t.kind !== 'asr',                          // manual English (best)
+    t => t.languageCode === 'en',                                               // auto-generated English
+    t => t.languageCode === 'en-US',                                            // en-US variant
+    t => typeof t.languageCode === 'string' && t.languageCode.startsWith('en'), // any en-*
   ]
   for (const pred of priority) {
     const track = tracks.find(pred)
-    if (track?.baseUrl) return track.baseUrl
+    if (!track?.baseUrl) continue
+
+    // Strip any `tlang` (translation language) parameter YouTube may have injected.
+    // tlang causes the timedtext server to machine-translate to another language.
+    let url = track.baseUrl
+    try {
+      const u = new URL(url.startsWith('http') ? url : `https://www.youtube.com${url}`)
+      u.searchParams.delete('tlang')
+      // Ensure fmt=json3 for reliable parsing
+      if (!u.searchParams.has('fmt')) u.searchParams.set('fmt', 'json3')
+      url = u.toString()
+    } catch { /* keep original url */ }
+
+    return url
   }
   return null
 }
