@@ -393,7 +393,7 @@ const WATCH_PAGE_HEADERS = {
   'sec-fetch-site': 'none',
   'sec-fetch-user': '?1',
   'Upgrade-Insecure-Requests': '1',
-  'Cookie': 'SOCS=CAI; YSC=1; VISITOR_INFO1_LIVE=1',
+  'Cookie': 'SOCS=CAI; CONSENT=YES+cb; PREF=hl=en&gl=US',
 }
 
 /**
