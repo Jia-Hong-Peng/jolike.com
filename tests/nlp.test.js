@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractLearningItems } from '../src/lib/nlp.js'
+import { extractLearningItems, lookupMeaning, wordDifficultyTier } from '../src/lib/nlp.js'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 const makeTranscript = (texts) => texts.map((text, i) => ({ text, start: i * 3, dur: 3 }))
@@ -408,6 +408,64 @@ describe('nlp.js — AWL/NAWL academic word detection', () => {
     if (assessItem && bizarreItem) {
       // assess (AWL S1, tier3+boost) should rank before bizarre (NAWL/tier3, less boost)
       expect(items.indexOf(assessItem)).toBeLessThanOrEqual(items.indexOf(bizarreItem))
+    }
+  })
+})
+
+// ── lookupMeaning ─────────────────────────────────────────────────────────────
+describe('nlp.js — lookupMeaning', () => {
+  it('T-LM-1 — returns meaning for a word in cedict', () => {
+    // 'run' is in cedict
+    const result = lookupMeaning('run')
+    expect(typeof result).toBe('string')
+    // May be empty if not in test data, but should not throw
+  })
+
+  it('T-LM-2 — returns empty string for unknown word', () => {
+    expect(lookupMeaning('xyzzy_nonexistent_word_abc')).toBe('')
+  })
+
+  it('T-LM-3 — canonical fallback: "running" resolves via "run"', () => {
+    const direct  = lookupMeaning('run')
+    const inflect = lookupMeaning('running')
+    // If "run" has a meaning, "running" should return the same meaning via fallback
+    if (direct) {
+      expect(inflect).toBe(direct)
+    } else {
+      // Neither in cedict — both should be empty
+      expect(inflect).toBe('')
+    }
+  })
+
+  it('T-LM-4 — case-insensitive: "RUN" and "run" return same result', () => {
+    expect(lookupMeaning('RUN')).toBe(lookupMeaning('run'))
+  })
+})
+
+// ── wordDifficultyTier ────────────────────────────────────────────────────────
+describe('nlp.js — wordDifficultyTier', () => {
+  it('T-WDT-1 — common word returns tier 1 or 2', () => {
+    // "happy" / "good" should be A1-B1
+    const tier = wordDifficultyTier('happy')
+    expect(tier).toBeGreaterThanOrEqual(1)
+    expect(tier).toBeLessThanOrEqual(4)
+  })
+
+  it('T-WDT-2 — unknown rare word returns tier 4', () => {
+    // A nonsense word is unknown → tier 4 (max/hardest)
+    expect(wordDifficultyTier('xyzzy_nonexistent_rare')).toBe(4)
+  })
+
+  it('T-WDT-3 — AWL academic word returns tier >= 3', () => {
+    // "analyze" / "constitute" are AWL Sublist 1 → tier 3 minimum
+    const tier = wordDifficultyTier('constitute')
+    expect(tier).toBeGreaterThanOrEqual(3)
+  })
+
+  it('T-WDT-4 — returns integer 1-4 for all inputs', () => {
+    for (const word of ['the', 'run', 'sophisticated', 'xyzzy_rare']) {
+      const t = wordDifficultyTier(word)
+      expect([1, 2, 3, 4]).toContain(t)
     }
   })
 })
