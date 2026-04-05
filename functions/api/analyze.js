@@ -25,7 +25,8 @@ export async function onRequestPost(context) {
   // Requires Bearer BATCH_SECRET to prevent abuse.
   if (Array.isArray(preloadedTranscript) && preloadedTranscript.length > 0) {
     const auth = request.headers.get('Authorization')
-    if (!env.BATCH_SECRET || auth !== `Bearer ${env.BATCH_SECRET}`) {
+    const batchSecret = env.CHANNEL_SYNC_SECRET || env.BATCH_SECRET
+    if (!batchSecret || auth !== `Bearer ${batchSecret}`) {
       return jsonError(401, 'UNAUTHORIZED', '需要驗證')
     }
     const videoId = extractVideoId(url || '')

@@ -104,37 +104,25 @@
           </button>
           <span v-else class="text-xs text-green-500 px-2 py-2">✓ 歷史影片已全部入庫</span>
 
-          <!-- Fetch transcripts for stubs -->
+          <!-- Fetch transcripts via GitHub Actions (reliable — GitHub IPs not blocked by YouTube) -->
           <button
             v-if="stubCounts[ch.id] > 0"
             class="text-xs px-3 py-2 rounded-xl font-medium transition-colors min-h-[36px]"
-            :class="channelBusy[ch.id] === 'transcripts'
+            :class="channelBusy[ch.id] === 'github'
               ? 'bg-blue-900 text-blue-400 cursor-not-allowed'
               : 'bg-blue-900/60 text-blue-300 hover:bg-blue-900'"
             :disabled="!!channelBusy[ch.id]"
-            @click="fetchTranscripts(ch)"
+            @click="triggerFetch(ch)"
           >
-            <span v-if="channelBusy[ch.id] === 'transcripts'" class="animate-spin inline-block mr-1">⟳</span>
-            🎬 抓取字幕 ({{ stubCounts[ch.id] }} 部待處理)
+            <span v-if="channelBusy[ch.id] === 'github'" class="animate-spin inline-block mr-1">⟳</span>
+            🤖 抓取字幕 ({{ stubCounts[ch.id] }} 部待處理)
           </button>
         </div>
 
-        <!-- Transcript fetch progress -->
-        <div v-if="transcriptProgress[ch.id]" class="mt-3">
-          <div class="flex justify-between text-xs text-gray-400 mb-1">
-            <span>{{ transcriptProgress[ch.id].done }} / {{ transcriptProgress[ch.id].total }} 部完成</span>
-            <span class="text-gray-600">
-              <span v-if="transcriptProgress[ch.id].skipped > 0">{{ transcriptProgress[ch.id].skipped }} 無字幕</span>
-              <span v-if="transcriptProgress[ch.id].errors > 0" class="text-yellow-600 ml-2">{{ transcriptProgress[ch.id].errors }} 失敗</span>
-            </span>
-          </div>
-          <div class="w-full bg-gray-800 rounded-full h-2">
-            <div
-              class="bg-blue-600 h-2 rounded-full transition-all duration-300"
-              :style="{ width: `${Math.round(transcriptProgress[ch.id].done / transcriptProgress[ch.id].total * 100)}%` }"
-            ></div>
-          </div>
-          <p v-if="transcriptProgress[ch.id].log" class="text-gray-600 text-xs mt-1 truncate">{{ transcriptProgress[ch.id].log }}</p>
+        <!-- GitHub Actions triggered — show link -->
+        <div v-if="githubRunUrl[ch.id]" class="mt-3 text-xs text-blue-400">
+          ✓ GitHub Actions 已啟動，在背景處理中
+          <a :href="githubRunUrl[ch.id]" target="_blank" class="underline ml-1">查看進度 →</a>
         </div>
 
         <!-- Result notice -->
@@ -156,7 +144,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import {
   getChannels, addChannel as apiAddChannel, deleteChannel as apiDeleteChannel,
-  syncChannel, importChannelVideosPage, getChannelVideos, analyzeVideo,
+  syncChannel, importChannelVideosPage, getChannelVideos, triggerGithubFetch,
 } from '@/services/api.js'
 
 const loading  = ref(true)
@@ -165,10 +153,10 @@ const addUrl   = ref('')
 const adding   = ref(false)
 const addError = ref('')
 
-const channelBusy     = reactive({})  // channelId → 'sync'|'import'|'transcripts'|null
-const channelResult   = reactive({})  // channelId → { ok, msg }
-const transcriptProgress = reactive({})  // channelId → { done, total, skipped, log }
-const stubCounts      = reactive({})  // channelId → number of stubs without transcript
+const channelBusy   = reactive({})  // channelId → 'sync'|'import'|'github'|null
+const channelResult = reactive({})  // channelId → { ok, msg }
+const githubRunUrl  = reactive({})  // channelId → GitHub Actions runs URL
+const stubCounts    = reactive({})  // channelId → number of stubs without transcript
 
 onMounted(loadChannels)
 
@@ -284,70 +272,22 @@ async function importAll(channel) {
   }
 }
 
-async function fetchTranscripts(channel) {
-  channelBusy[channel.id] = 'transcripts'
+async function triggerFetch(channel) {
+  channelBusy[channel.id] = 'github'
   channelResult[channel.id] = null
-
-  // Get list of videos without transcript
-  let videos = []
+  githubRunUrl[channel.id] = null
   try {
-    const data = await getChannelVideos(channel.id, { limit: 500 })
-    videos = (data.videos ?? []).filter(v => !v.hasTranscript)
-  } catch {
-    channelResult[channel.id] = { ok: false, msg: '載入影片清單失敗' }
-    channelBusy[channel.id] = null
-    return
-  }
-
-  if (videos.length === 0) {
-    channelResult[channel.id] = { ok: true, msg: '所有影片都已有字幕' }
-    channelBusy[channel.id] = null
-    return
-  }
-
-  transcriptProgress[channel.id] = { done: 0, total: videos.length, skipped: 0, errors: 0, log: '' }
-
-  // Process one at a time — batching hammers YouTube and triggers IP-level rate limiting
-  for (const v of videos) {
-    if (channelBusy[channel.id] !== 'transcripts') break  // cancelled
-
-    transcriptProgress[channel.id].log = `處理中：${v.title || v.id}`
-    try {
-      await analyzeVideo(`https://www.youtube.com/watch?v=${v.id}`)
-      transcriptProgress[channel.id].done++
-    } catch (e) {
-      if (e?.error === 'NO_CAPTIONS') {
-        // Genuinely no English captions — stub was deleted server-side
-        transcriptProgress[channel.id].skipped++
-        transcriptProgress[channel.id].done++
-      } else if (e?.error === 'RATE_LIMITED') {
-        // YouTube blocked us — pause 30s then continue (stub stays for retry)
-        transcriptProgress[channel.id].log = '⏸ YouTube 速率限制，等待 30 秒...'
-        transcriptProgress[channel.id].errors++
-        transcriptProgress[channel.id].done++
-        await new Promise(r => setTimeout(r, 30000))
-      } else {
-        // Other network error — stub stays in D1, can retry later
-        transcriptProgress[channel.id].errors++
-        transcriptProgress[channel.id].done++
-      }
+    const res = await triggerGithubFetch(channel.id)
+    githubRunUrl[channel.id] = res.runsUrl
+    channelResult[channel.id] = { ok: true, msg: '✓ GitHub Actions 已啟動，請點右上角連結追蹤進度' }
+  } catch (e) {
+    channelResult[channel.id] = {
+      ok: false,
+      msg: e?.message || '觸發失敗，請確認 GITHUB_TOKEN 已在 Cloudflare Pages 設定',
     }
-
-    // Jitter delay 1–2.5s to avoid fixed-interval detection
-    await new Promise(r => setTimeout(r, 1000 + Math.random() * 1500))
+  } finally {
+    channelBusy[channel.id] = null
   }
-
-  const prog = transcriptProgress[channel.id]
-  const succeeded = prog.done - prog.skipped - prog.errors
-  const parts = [`成功 ${succeeded} 部`]
-  if (prog.skipped > 0) parts.push(`${prog.skipped} 部無英文字幕`)
-  if (prog.errors > 0) parts.push(`${prog.errors} 部抓取失敗（可再試）`)
-  channelResult[channel.id] = {
-    ok: true,
-    msg: `✓ 完成！${parts.join('，')}`,
-  }
-  channelBusy[channel.id] = null
-  await loadChannels()
 }
 
 function formatDate(ts) {

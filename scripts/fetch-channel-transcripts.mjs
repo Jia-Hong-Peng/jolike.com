@@ -28,7 +28,7 @@ const { values: args } = parseArgs({
 })
 
 const API_BASE    = process.env.API_BASE?.replace(/\/$/, '') || 'https://jolike.com'
-const SECRET      = process.env.BATCH_SECRET
+const SECRET      = process.env.BATCH_SECRET || process.env.CHANNEL_SYNC_SECRET
 const DELAY_MS    = parseInt(process.env.DELAY_MS || '1200', 10)
 const LIMIT       = parseInt(args.limit, 10)
 

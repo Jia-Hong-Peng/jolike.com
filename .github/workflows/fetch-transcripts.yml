@@ -31,7 +31,7 @@ jobs:
       - name: Fetch transcripts
         env:
           API_BASE: https://jolike.com
-          BATCH_SECRET: ${{ secrets.BATCH_SECRET }}
+          BATCH_SECRET: ${{ secrets.CHANNEL_SYNC_SECRET }}
         run: |
           ARGS=""
           if [ -n "${{ github.event.inputs.channel }}" ]; then
