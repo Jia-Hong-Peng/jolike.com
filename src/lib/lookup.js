@@ -169,6 +169,23 @@ export function wordDifficultyTier(word) {
   return 4
 }
 
+/**
+ * Returns true if the word (or any morphological stem) is found in any of
+ * our curated vocabulary data sets: cefr_vocab, awl_nawl, or coca5000.
+ * Words NOT passing this check are "unknown domain jargon" — still shown
+ * as a last resort, but deprioritized in scoring.
+ * @param {string} word
+ * @returns {boolean}
+ */
+export function isKnownVocab(word) {
+  const w = word.toLowerCase()
+  if (cefrMap[w] !== undefined || awlNawlMap[w] !== undefined || awlSet.has(w)) return true
+  for (const stem of morphStems(w)) {
+    if (cefrMap[stem] !== undefined || awlNawlMap[stem] !== undefined || awlSet.has(stem)) return true
+  }
+  return false
+}
+
 // ── Chinese meaning lookup ─────────────────────────────────────────────────────
 export function lookupMeaning(keyword) {
   const key = keyword.toLowerCase()

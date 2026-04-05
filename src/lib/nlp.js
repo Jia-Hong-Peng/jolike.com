@@ -30,7 +30,7 @@ import opalPhrasesData from '@/data/opal_phrases.json' // Oxford OPAL academic p
 // lookup.js imports the data directly; nlp.js re-uses the same implementations.
 export { morphStems, canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning } from '@/lib/lookup.js'
 export { lookupNgslDef } from '@/lib/ngsl.js'
-import { canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, getVocabCategories } from '@/lib/lookup.js'
+import { canonicalForm, awlSublist, wordDifficultyTier, lookupMeaning, getVocabCategories, isKnownVocab } from '@/lib/lookup.js'
 
 // OPAL academic phrases: Set of Oxford Phrasal Academic Lexicon entries
 // 572 academic collocations: "as a result", "in terms of", "based on", etc.
@@ -75,26 +75,39 @@ function minLength(level) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+/**
+ * Score a candidate word for learning priority.
+ *
+ * PRIMARY signal: membership in our curated vocab lists.
+ *   Words in AWL/NAWL/TSL/CEFR/COCA are what we actually teach.
+ *   Unknown domain jargon (tier 4 with no list membership) is a last resort.
+ *
+ * SECONDARY signal: tier (difficulty), frequency, POS, cedict.
+ *
+ * Scale reference:
+ *   AWL S1 word  → 25 + 6 + freq ≈ 31+   ← highest priority
+ *   NAWL word    → 18 + 6 + freq ≈ 24+
+ *   TSL TOEIC    → 15 + 6 + freq ≈ 21+
+ *   CEFR B2 only → 10 + 6 + freq ≈ 16+
+ *   Unknown rare → 0  + 8 + freq ≈ 8+    ← last resort
+ */
 function learningScore(word, freq, posMult = 1.0) {
+  const sub  = awlSublist(word)
   const tier = wordDifficultyTier(word)
   const cedictBoost = lookupMeaning(word) ? 1.2 : 1.0
 
-  // Priority bonus by source list (research-backed):
-  //   AWL Sublist 1 → +4.0pts (highest IELTS coverage, ~2% per sublist)
-  //   AWL Sublist 10 → +0.4pts
-  //   NAWL (11) → +0.5pts (modern academic: methodology, trajectory)
-  //   TSL (12) → +1.0pts (TOEIC business: quarterly, negotiate, invoice)
-  const sub = awlSublist(word)
-  const awlBoost = sub >= 1 && sub <= 10
-    ? (11 - sub) * 0.4   // AWL: S1=4.0, S5=2.4, S10=0.4
-    : sub === 11
-      ? 0.5              // NAWL: modern academic vocab
-      : sub === 12
-        ? 1.0            // TSL: TOEIC commercial/business vocab
-        : 0
+  // Primary: vocab list membership bonus
+  let listBonus = 0
+  if (sub >= 1 && sub <= 3)       listBonus = 25  // AWL S1-3: IELTS/TOEFL core
+  else if (sub >= 4 && sub <= 7)  listBonus = 20  // AWL S4-7: important academic
+  else if (sub >= 8 && sub <= 10) listBonus = 15  // AWL S8-10: academic
+  else if (sub === 11)            listBonus = 18  // NAWL: modern academic corpus
+  else if (sub === 12)            listBonus = 15  // TSL: TOEIC business vocab
+  else if (isKnownVocab(word))    listBonus = 10  // in CEFR/COCA — curated but not AWL
+  // 0 = not in any list (domain jargon, proper nouns, unknown)
 
-  // Tier is the primary signal (scale 10–40). Frequency + POS + cedict + academic lists are secondary.
-  return tier * 10 + Math.log1p(freq) * posMult * cedictBoost + awlBoost
+  // Secondary: difficulty tier (2 pts each) + frequency + POS + cedict
+  return listBonus + tier * 2 + Math.log1p(freq) * posMult * cedictBoost
 }
 
 /** Strip inline sound-effect labels like [music] or [applause] embedded in speech. */
@@ -175,10 +188,15 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     return candidates.reduce((best, s) => s.text.length < best.text.length ? s : best)
   }
 
-  // Tier-filtered ranking — knownWords filter happens here so fallback accounts for it
+  // Tier-filtered ranking — knownWords filter happens here so fallback accounts for it.
+  // Words in any curated vocab list (awlSublist > 0 or isKnownVocab) bypass the tier
+  // threshold so they always compete on score; only unknown jargon is gated by tier.
   function rankWords(tierThreshold) {
     return [...wordFreq.entries()]
-      .filter(([w]) => wordDifficultyTier(w) >= tierThreshold)
+      .filter(([w]) => {
+        if (awlSublist(w) > 0 || isKnownVocab(w)) return true  // always include list words
+        return wordDifficultyTier(w) >= tierThreshold           // gate unknown words by tier
+      })
       .filter(([w]) => !knownWords.has(w))
       .sort((a, b) => learningScore(b[0], b[1], posMultiplier(b[0]))
                     - learningScore(a[0], a[1], posMultiplier(a[0])))
