@@ -137,9 +137,15 @@
           />
         </LearningCard>
 
-        <!-- Floating vocab list button (top-right) -->
+      </div>
+    </div>
+
+    <!-- Nav buttons: Teleported to body as fixed to avoid YouTube iframe z-index issue -->
+    <Teleport to="body">
+      <template v-if="currentCard && !isComplete && !allMastered && !error && !loading">
+        <!-- Top-right: vocab list -->
         <button
-          class="absolute top-4 right-4 z-20 bg-black/50 backdrop-blur-sm text-white
+          class="fixed top-4 right-4 z-[100] bg-black/50 backdrop-blur-sm text-white
                  rounded-full w-11 h-11 flex items-center justify-center text-lg
                  border border-white/20 hover:bg-black/70 transition-colors"
           title="單字總表"
@@ -147,17 +153,14 @@
         >
           ☰
         </button>
-
-        <!-- Progress + level indicator (top-left) -->
-        <div class="absolute top-4 left-4 z-20 flex items-center gap-2">
+        <!-- Top-left: back + progress + level -->
+        <div class="fixed top-4 left-4 z-[100] flex items-center gap-2">
           <button
             class="bg-black/50 backdrop-blur-sm text-gray-300 text-xs px-3 py-2 rounded-full border border-white/20
-                   hover:bg-black/70 transition-colors min-h-[32px]"
+                   hover:bg-black/70 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             title="回首頁"
-            @click="() => (window.location.href = '/')"
-          >
-            ←
-          </button>
+            @click="goHome"
+          >←</button>
           <div class="bg-black/50 backdrop-blur-sm text-gray-300 text-xs px-3 py-2 rounded-full border border-white/20">
             {{ currentIndex + 1 }} / {{ cards.length }}
           </div>
@@ -171,12 +174,10 @@
             }"
             :title="currentLevel.desc"
             @click="cycleLevel"
-          >
-            {{ currentLevel.label }} ⟳
-          </button>
+          >{{ currentLevel.label }} ⟳</button>
         </div>
-      </div>
-    </div>
+      </template>
+    </Teleport>
 
     <!-- Vocab list drawer -->
     <Teleport to="body">

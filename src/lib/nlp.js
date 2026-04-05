@@ -61,11 +61,14 @@ const STOPS_ALWAYS = new Set([
   'ive','hed','shed','theyd','youd','hell','shell','theyll','youll',
 ])
 
-// Minimum tier required for this level
-function minTierForLevel(level) {
-  if (level === 'advanced')     return 4  // C1+ only (rare/specialized); fallback to 3 if sparse
-  if (level === 'intermediate') return 3  // B2+ (academic/professional vocab)
-  return 1                               // beginner: any tier
+// Tier range per level:
+//   advanced:     tier 4     (C1+ rare/specialized only)
+//   intermediate: tier 3-4   (B2+ academic/professional)
+//   beginner:     tier 1-2   (A1/A2/B1 only — exclude B2+ academic to avoid overload)
+function tierRangeForLevel(level) {
+  if (level === 'advanced')     return { min: 4, max: 4 }
+  if (level === 'intermediate') return { min: 3, max: 4 }
+  return { min: 1, max: 2 }
 }
 
 function minLength(level) {
@@ -131,8 +134,9 @@ function getClip(segment) {
  * @param {'beginner'|'intermediate'|'advanced'} level
  */
 export function extractLearningItems(transcript, videoId, level = 'intermediate', knownWords = new Set()) {
-  const minLen  = minLength(level)
-  let   minTier = minTierForLevel(level)
+  const minLen = minLength(level)
+  const { min: initialMin, max: maxTier } = tierRangeForLevel(level)
+  let minTier = initialMin
 
   // ── Step 1: Extract and score words ──────────────────────────────────────────
   const wordFreq    = new Map()
@@ -189,22 +193,26 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     return candidates.reduce((best, s) => s.text.length < best.text.length ? s : best)
   }
 
-  // Tier-filtered ranking — tier threshold is the strict level gate.
-  // listBonus in learningScore() handles ordering (vocab-list words score higher);
-  // the tier filter itself is NOT bypassed so easy words are excluded for advanced users.
-  function rankWords(tierThreshold) {
+  // Tier-filtered ranking with range [minTier, maxTier].
+  // Both bounds are strict: beginner sees tier 1-2 only, advanced tier 4 only.
+  // listBonus in learningScore() handles ordering within the passing set.
+  function rankWords(minT, maxT) {
     return [...wordFreq.entries()]
-      .filter(([w]) => wordDifficultyTier(w) >= tierThreshold)
+      .filter(([w]) => { const t = wordDifficultyTier(w); return t >= minT && t <= maxT })
       .filter(([w]) => !knownWords.has(w))
       .sort((a, b) => learningScore(b[0], b[1], posMultiplier(b[0]))
                     - learningScore(a[0], a[1], posMultiplier(a[0])))
   }
 
-  // Adaptive tier fallback: cascade down until enough words or hit tier 1
-  let rankedWords = rankWords(minTier)
-  while (rankedWords.length < MIN_WORDS_BEFORE_FALLBACK && minTier > 1) {
-    minTier -= 1
-    rankedWords = rankWords(minTier)
+  // Adaptive fallback: cascade min down (or max up for beginner) until enough words
+  let rankedWords = rankWords(minTier, maxTier)
+  while (rankedWords.length < MIN_WORDS_BEFORE_FALLBACK) {
+    if (minTier > 1) {
+      minTier -= 1
+    } else {
+      break  // already at widest range
+    }
+    rankedWords = rankWords(minTier, maxTier)
   }
 
   const seenKeywords = new Set()
