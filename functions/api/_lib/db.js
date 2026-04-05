@@ -134,6 +134,10 @@ export async function softDeleteVideo(DB, id) {
     .run()
 }
 
+export async function deleteVideo(DB, id) {
+  await DB.prepare('DELETE FROM videos WHERE id = ?').bind(id).run()
+}
+
 // ── video_vocab ────────────────────────────────────────────────────────────────
 
 /**

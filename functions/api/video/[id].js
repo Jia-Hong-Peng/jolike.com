@@ -5,7 +5,7 @@
  * actual transcript from YouTube on-demand and updates the D1 record.
  */
 
-import { getVideo, upsertVideo } from '../_lib/db.js'
+import { getVideo, upsertVideo, deleteVideo } from '../_lib/db.js'
 import { fetchTranscript } from '../_lib/youtube.js'
 
 export async function onRequestGet(context) {
@@ -47,7 +47,8 @@ export async function onRequestGet(context) {
       })
     }
 
-    // YouTube has no English captions for this video
+    // YouTube has no English captions — remove the stub so it doesn't stay in the library
+    await deleteVideo(DB, videoId).catch(() => {})
     return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
   }
 

@@ -5,7 +5,7 @@
  */
 
 import { extractVideoId, fetchTranscript } from './_lib/youtube.js'
-import { getVideo, saveVideo } from './_lib/db.js'
+import { getVideo, saveVideo, upsertVideo, deleteVideo } from './_lib/db.js'
 
 export async function onRequestPost(context) {
   const { request, env } = context
@@ -28,7 +28,10 @@ export async function onRequestPost(context) {
 
   // Check D1 cache first
   const cached = await getVideo(DB, videoId)
-  if (cached) {
+  const isStub = cached && (!cached.raw_transcript || cached.raw_transcript.length === 0)
+
+  // Return real cached transcript immediately
+  if (cached && !isStub) {
     return jsonOk({
       video: {
         id: cached.id,
@@ -40,13 +43,15 @@ export async function onRequestPost(context) {
     })
   }
 
-  // Fetch transcript + oEmbed title in parallel
+  // Fetch transcript from YouTube (new video, or stub that needs real transcript)
   const [result, title] = await Promise.all([
     fetchTranscript(videoId),
-    fetchOEmbedTitle(videoId),
+    isStub ? Promise.resolve(cached.title || '') : fetchOEmbedTitle(videoId),
   ])
 
   if (result.error === 'NO_CAPTIONS') {
+    // Stub with no English captions — remove it so it doesn't clutter the library
+    if (isStub) await deleteVideo(DB, videoId).catch(() => {})
     return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
   }
   if (result.error) {
@@ -59,21 +64,20 @@ export async function onRequestPost(context) {
   const lastSeg = transcript[transcript.length - 1]
   const duration_seconds = lastSeg ? Math.ceil(lastSeg.start + lastSeg.dur) : 0
 
-  // Persist to D1
+  // Persist to D1 (upsert for stubs, insert-ignore for new videos)
   try {
-    await saveVideo(DB, {
-      id: videoId,
-      title,
-      duration_seconds,
-      transcript,
-    })
+    if (isStub) {
+      await upsertVideo(DB, { id: videoId, title: cached.title || title, duration_seconds, transcript })
+    } else {
+      await saveVideo(DB, { id: videoId, title, duration_seconds, transcript })
+    }
   } catch (err) {
     console.error('D1 save error:', err)
     // Non-fatal: still return transcript to client
   }
 
   return jsonOk({
-    video: { id: videoId, title, duration_seconds },
+    video: { id: videoId, title: isStub ? cached.title || title : title, duration_seconds },
     transcript,
     cached: false,
   })
