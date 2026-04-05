@@ -8,7 +8,9 @@
       :disabled="!canGoPrev"
       title="上一則"
       @click="$emit('prev')"
-    >◀</button>
+    >
+      ◀
+    </button>
 
     <!-- Known -->
     <button
@@ -29,7 +31,9 @@
              text-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
       title="下一則"
       @click="$emit('next')"
-    >▶</button>
+    >
+      ▶
+    </button>
   </div>
 </template>
 
