@@ -33,10 +33,14 @@ jobs:
         run: pip install yt-dlp "youtube-transcript-api==0.6.2"
 
       - name: Setup YouTube cookies
-        if: ${{ secrets.YOUTUBE_COOKIES != '' }}
         run: |
-          echo "$YOUTUBE_COOKIES" | base64 -d > /tmp/yt-cookies.txt
-          echo "YTDLP_COOKIES=/tmp/yt-cookies.txt" >> "$GITHUB_ENV"
+          if [ -n "$YOUTUBE_COOKIES" ]; then
+            echo "$YOUTUBE_COOKIES" | base64 -d > /tmp/yt-cookies.txt
+            echo "YTDLP_COOKIES=/tmp/yt-cookies.txt" >> "$GITHUB_ENV"
+            echo "Cookies loaded."
+          else
+            echo "No YOUTUBE_COOKIES secret set — proceeding without cookies."
+          fi
         env:
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
 
