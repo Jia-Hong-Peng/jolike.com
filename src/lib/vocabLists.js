@@ -62,9 +62,17 @@ export const VOCAB_LISTS = [
     id: 'toeic',
     label: '多益 TOEIC',
     emoji: '💼',
-    desc: 'TOEIC 商業英文核心詞彙，涵蓋職場常用語',
+    desc: 'TOEIC 商業英文核心詞彙 (TOEIC Service List, 1250 詞)',
     color: 'emerald',
     badgeClass: 'bg-emerald-900/60 text-emerald-300 border border-emerald-700',
+  },
+  {
+    id: 'bsl',
+    label: '商務 BSL',
+    emoji: '📈',
+    desc: '商務服務詞彙 (Business Service List, 1744 詞)',
+    color: 'teal',
+    badgeClass: 'bg-teal-900/60 text-teal-300 border border-teal-700',
   },
   {
     id: 'ielts',
@@ -146,15 +154,25 @@ export async function loadWordList(listId) {
   }
 
   // ── CEFR levels ──────────────────────────────────────────────────────────
-  if (listId === 'cefr_a' || listId === 'cefr_b1' || listId === 'cefr_c1') {
+  if (listId === 'cefr_a' || listId === 'cefr_b1') {
     const { default: data } = await import('@/data/cefr_vocab.json')
-    const tier = listId === 'cefr_a' ? 1 : listId === 'cefr_b1' ? 2 : 4
+    const tier = listId === 'cefr_a' ? 1 : 2
     return Object.entries(data).filter(([, t]) => t === tier).map(([w]) => w).sort()
+  }
+  if (listId === 'cefr_c1') {
+    // Use Oxford 5000 C1 entries — richer than cefr_vocab.json (1287 words with POS)
+    const { default: data } = await import('@/data/oxford5000.json')
+    return Object.entries(data).filter(([, v]) => v.level === 'C1').map(([w]) => w).sort()
   }
 
   // ── Exams ─────────────────────────────────────────────────────────────────
   if (listId === 'toeic') {
-    const { default: data } = await import('@/data/toeic_vocab.json')
+    // TSL (TOEIC Service List) — 1250 words replacing old 378-word list
+    const { default: data } = await import('@/data/tsl.json')
+    return Object.keys(data).sort()
+  }
+  if (listId === 'bsl') {
+    const { default: data } = await import('@/data/bsl.json')
     return Object.keys(data).sort()
   }
 

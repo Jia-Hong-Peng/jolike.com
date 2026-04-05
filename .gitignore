@@ -28,3 +28,6 @@ npm-debug.log*
 # Test coverage
 coverage/
 .gstack/
+
+# Copyright-restricted data files (do not commit)
+src/data/longman3000.json

@@ -133,9 +133,9 @@
             原型：{{ currentCard.lemma }}
           </p>
 
-          <!-- Phonetic + part of speech (from dictionary API) -->
-          <p v-if="dictData?.phonetic || dictData?.partOfSpeech" class="text-gray-400 text-base mb-3">
-            <span v-if="dictData?.phonetic">{{ dictData.phonetic }}</span>
+          <!-- Phonetic + part of speech (from dictionary API, or CMUdict IPA fallback) -->
+          <p v-if="dictData?.phonetic || ipaPhonetic || dictData?.partOfSpeech" class="text-gray-400 text-base mb-3">
+            <span>{{ dictData?.phonetic || ipaPhonetic }}</span>
             <span v-if="dictData?.partOfSpeech" class="text-gray-600 ml-2 text-sm">{{ dictData.partOfSpeech }}</span>
           </p>
 
@@ -223,6 +223,7 @@ import { scheduleReview, getDue } from '@/composables/useSRS.js'
 import { lookupDefinition } from '@/composables/useDictionary.js'
 import { useTTS } from '@/composables/useTTS.js'
 import { getVocabVideos } from '@/services/api.js'
+import { lookupIpa } from '@/lib/pronunciation.js'
 
 // ── URL param ─────────────────────────────────────────────────────────────────
 const listId = new URLSearchParams(window.location.search).get('list') || ''
@@ -299,9 +300,10 @@ async function loadRelatedVideos() {
 }
 
 // ── Dictionary lookup ─────────────────────────────────────────────────────────
-const dictData      = ref(null)
+const dictData        = ref(null)
+const ipaPhonetic     = ref('')
 const fallbackMeaning = ref('')
-const loadingDef    = ref(false)
+const loadingDef      = ref(false)
 
 let generation = 0
 
@@ -310,6 +312,7 @@ async function loadCardData() {
   const gen = ++generation
   loadingDef.value = true
   dictData.value = null
+  ipaPhonetic.value = ''
   fallbackMeaning.value = ''
 
   try {
@@ -323,6 +326,13 @@ async function loadCardData() {
       if (gen !== generation) return
       const ngslDef = lookupNgslDef(currentCard.value.lemma || currentCard.value.keyword)
       if (ngslDef) dictData.value = { ...(dictData.value || {}), definition: ngslDef }
+    }
+
+    // CMUdict IPA fallback: if Free Dictionary has no phonetic, look up cmudict
+    if (!dict?.phonetic) {
+      const ipa = await lookupIpa(currentCard.value.lemma || currentCard.value.keyword)
+      if (gen !== generation) return
+      if (ipa) ipaPhonetic.value = ipa
     }
 
     // Chinese meaning fallback via translation

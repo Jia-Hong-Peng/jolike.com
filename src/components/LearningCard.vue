@@ -76,10 +76,10 @@
             🔊
           </button>
         </div>
-        <!-- IPA phonetic -->
-        <p v-if="dictData && dictData.phonetic" class="text-gray-400 text-sm mt-0.5">
-          {{ dictData.phonetic }}
-          <span v-if="dictData.partOfSpeech" class="text-gray-600 ml-1">{{ dictData.partOfSpeech }}</span>
+        <!-- IPA phonetic (Free Dictionary or CMUdict fallback) -->
+        <p v-if="(dictData && dictData.phonetic) || ipaPhonetic" class="text-gray-400 text-sm mt-0.5">
+          {{ (dictData && dictData.phonetic) || ipaPhonetic }}
+          <span v-if="dictData && dictData.partOfSpeech" class="text-gray-600 ml-1">{{ dictData.partOfSpeech }}</span>
         </p>
       </div>
 
@@ -117,6 +117,7 @@ import VideoClip from './VideoClip.vue'
 import HighlightedSentence from './HighlightedSentence.vue'
 import { lookupDefinition } from '@/composables/useDictionary.js'
 import { useTTS } from '@/composables/useTTS.js'
+import { lookupIpa } from '@/lib/pronunciation.js'
 
 const props = defineProps({
   card: {
@@ -138,6 +139,7 @@ const translating   = ref(false)
 const translationText = ref('')
 const keywordMeaning  = ref('')
 const dictData        = ref(null)  // { phonetic, partOfSpeech, definition, example }
+const ipaPhonetic     = ref('')
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
 const { hasTTS, speak } = useTTS()
@@ -182,6 +184,7 @@ async function loadCardData() {
   translationText.value = ''
   keywordMeaning.value  = ''
   dictData.value        = null
+  ipaPhonetic.value     = ''
 
   try {
     // Phase 1: dictionary + sentence translation (parallel, independent)
@@ -192,6 +195,13 @@ async function loadCardData() {
     if (gen !== generation) return  // card changed mid-load — discard stale results
     dictData.value        = dict
     translationText.value = sentence
+
+    // CMUdict IPA fallback: if Free Dictionary has no phonetic, use cmudict
+    if (!dict?.phonetic && props.card.type === 'word') {
+      const ipa = await lookupIpa(props.card.lemma || props.card.keyword)
+      if (gen !== generation) return
+      if (ipa) ipaPhonetic.value = ipa
+    }
 
     // NGSL/TSL fallback: if Free Dictionary has no definition, lazy-load ngsl.js
     // (~246KB, only needed for words not in Free Dictionary)
