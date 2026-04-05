@@ -30,7 +30,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install "youtube-transcript-api==0.6.2"
+        run: pip install yt-dlp "youtube-transcript-api==0.6.2"
 
       - name: Fetch transcripts
         env:

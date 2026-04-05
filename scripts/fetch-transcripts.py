@@ -25,10 +25,25 @@ import urllib.request
 import urllib.error
 import random
 
+import subprocess
+import tempfile
+import glob
+
 try:
     from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled, VideoUnavailable
+    HAS_YT_TRANSCRIPT = True
 except ImportError:
-    print("❌ Missing dependency: pip install youtube-transcript-api")
+    HAS_YT_TRANSCRIPT = False
+
+# Check yt-dlp availability
+try:
+    subprocess.run(['yt-dlp', '--version'], capture_output=True, check=True)
+    HAS_YTDLP = True
+except (subprocess.CalledProcessError, FileNotFoundError):
+    HAS_YTDLP = False
+
+if not HAS_YT_TRANSCRIPT and not HAS_YTDLP:
+    print("❌ Missing dependency: pip install yt-dlp")
     sys.exit(1)
 
 # ── Config ─────────────────────────────────────────────────────────────────────
@@ -106,16 +121,81 @@ def save_transcript(video_id, title, duration_seconds, transcript):
 
 # ── Transcript fetching ────────────────────────────────────────────────────────
 
-def fetch_transcript(video_id):
+def fetch_via_ytdlp(video_id):
     """
-    Returns (segments, error_code) where segments is a list of {text, start, dur}
-    or None on failure.
+    Use yt-dlp to download subtitle/transcript files.
+    yt-dlp has maintained YouTube bot-detection evasion and works from datacenter IPs.
+    Returns (segments, error_code).
     """
+    if not HAS_YTDLP:
+        return None, 'no_ytdlp'
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        url = f'https://www.youtube.com/watch?v={video_id}'
+        cmd = [
+            'yt-dlp',
+            '--skip-download',
+            '--write-auto-sub',
+            '--write-sub',
+            '--sub-lang', 'en',
+            '--sub-format', 'json3',
+            '--output', f'{tmpdir}/%(id)s',
+            '--no-playlist',
+            '--quiet',
+            '--no-warnings',
+            url,
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        except subprocess.TimeoutExpired:
+            return None, 'ytdlp_timeout'
+        except Exception as e:
+            return None, f'ytdlp_err: {str(e)[:40]}'
+
+        # Find any generated subtitle file
+        sub_files = glob.glob(f'{tmpdir}/{video_id}*.json3')
+        if not sub_files:
+            # Check if there are any subtitle files at all
+            all_files = glob.glob(f'{tmpdir}/{video_id}*')
+            if not all_files:
+                return None, 'no_captions'
+            return None, 'no_en'
+
+        sub_file = sub_files[0]
+        try:
+            with open(sub_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            segments = []
+            for ev in data.get('events', []):
+                if not ev.get('segs'):
+                    continue
+                start = (ev.get('tStartMs', 0)) / 1000
+                dur = (ev.get('dDurationMs', 2000)) / 1000
+                text = ''.join(s.get('utf8', '') for s in ev['segs']).replace('\n', ' ').strip()
+                if text:
+                    segments.append({'text': text, 'start': round(start, 3), 'dur': round(dur, 3)})
+
+            if not segments:
+                return None, 'empty_transcript'
+
+            return segments, None
+        except Exception as e:
+            return None, f'parse_err: {str(e)[:40]}'
+
+
+def fetch_via_transcript_api(video_id):
+    """
+    Use youtube-transcript-api as fallback.
+    Works from residential IPs; may fail from datacenter IPs.
+    Returns (segments, error_code).
+    """
+    if not HAS_YT_TRANSCRIPT:
+        return None, 'no_yt_api'
+
     try:
-        # Try English first (manual), then auto-generated, then any English variant
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
 
-        # Priority: manual en > asr en > manual en-* > asr en-*
         transcript = None
         for lang in ['en']:
             try:
@@ -131,7 +211,6 @@ def fetch_transcript(video_id):
                 except NoTranscriptFound:
                     pass
         if transcript is None:
-            # Try any English variant
             for t in transcript_list:
                 if t.language_code.startswith('en'):
                     transcript = t
@@ -139,7 +218,7 @@ def fetch_transcript(video_id):
 
         if transcript is None:
             langs = ', '.join(t.language_code for t in transcript_list)
-            return None, f'no_en (available: {langs})'
+            return None, f'no_en ({langs})'
 
         data = transcript.fetch()
         segments = []
@@ -163,6 +242,24 @@ def fetch_transcript(video_id):
         return None, 'no_captions'
     except Exception as e:
         return None, f'error: {str(e)[:60]}'
+
+
+def fetch_transcript(video_id):
+    """
+    Try yt-dlp first (more reliable from datacenter IPs), fall back to youtube-transcript-api.
+    Returns (segments, error_code).
+    """
+    segments, err = fetch_via_ytdlp(video_id)
+    if segments:
+        return segments, None
+
+    # Fall back to youtube-transcript-api
+    segments2, err2 = fetch_via_transcript_api(video_id)
+    if segments2:
+        return segments2, None
+
+    # Both failed; return the more informative error
+    return None, err or err2
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
