@@ -12,7 +12,7 @@
  *   The watch page delivers captions without that requirement.
  */
 
-const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
 /**
  * Extract video ID from a YouTube URL.
@@ -49,8 +49,10 @@ export async function fetchTranscript(videoId) {
         'User-Agent': BROWSER_UA,
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        // Bypass YouTube's GDPR consent page (shown to non-US Cloudflare IPs)
-        'Cookie': 'CONSENT=YES+cb; YSC=1; VISITOR_INFO1_LIVE=1',
+        // Bypass YouTube's GDPR consent page.
+        // SOCS=CAI is the current (2024+) minimal consent cookie;
+        // CONSENT=YES+cb was the pre-2023 format (now ignored by YouTube).
+        'Cookie': 'SOCS=CAI; YSC=1; VISITOR_INFO1_LIVE=1',
       },
       signal: AbortSignal.timeout(8000),
     })
@@ -62,10 +64,17 @@ export async function fetchTranscript(videoId) {
 
   // Step 2: extract captionTracks from ytInitialPlayerResponse
   const tracks = extractCaptionTracks(html)
-  if (!tracks || tracks.length === 0) return { error: 'NO_CAPTIONS' }
 
   // Step 3: pick the best English track
-  const captionUrl = findEnglishCaptionUrl(tracks)
+  // Fallback: if watch-page extraction fails (bot detection / changed HTML structure),
+  // try the direct timedtext API which works without parsing the watch page.
+  let captionUrl
+  if (tracks && tracks.length > 0) {
+    captionUrl = findEnglishCaptionUrl(tracks)
+  }
+  if (!captionUrl) {
+    captionUrl = await findEnglishCaptionUrlDirect(videoId)
+  }
   if (!captionUrl) return { error: 'NO_CAPTIONS' }
 
   // Step 4: fetch the caption XML/JSON
@@ -144,6 +153,41 @@ function findEnglishCaptionUrl(tracks) {
   for (const pred of priority) {
     const track = tracks.find(pred)
     if (track?.baseUrl) return track.baseUrl
+  }
+  return null
+}
+
+/**
+ * Fallback: probe the direct timedtext API when watch-page extraction fails.
+ * YouTube's timedtext endpoint accepts language code directly and doesn't require
+ * parsing ytInitialPlayerResponse. Tries en, en-US, and auto-generated (kind=asr).
+ * Returns a ready-to-fetch caption URL, or null if none found.
+ * @param {string} videoId
+ * @returns {Promise<string|null>}
+ */
+async function findEnglishCaptionUrlDirect(videoId) {
+  const candidates = [
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&fmt=json3`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&fmt=json3`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en&kind=asr&fmt=json3`,
+    `https://www.youtube.com/api/timedtext?v=${videoId}&lang=en-US&kind=asr&fmt=json3`,
+  ]
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': BROWSER_UA },
+        signal: AbortSignal.timeout(5000),
+      })
+      if (!res.ok) continue
+      const text = await res.text()
+      // Non-empty JSON with events means the track exists and has content
+      if (text && text.length > 10 && text.trimStart().startsWith('{')) {
+        const data = JSON.parse(text)
+        if (data?.events?.length > 0) return url
+      }
+    } catch {
+      // try next candidate
+    }
   }
   return null
 }
