@@ -315,19 +315,22 @@ async function getChannels() {
   return data.channels ?? []
 }
 
-async function getStubs(channelId, limit = 500) {
+async function getStubs(channelId, processLimit = 500) {
+  // Use large page size to minimize API round-trips; stop once we have enough stubs
+  const PAGE_SIZE = 200
   const stubs = []
   let offset = 0
-  while (true) {
-    const res = await fetch(`${API_BASE}/api/channels/${channelId}?limit=${limit}&offset=${offset}`)
+  while (stubs.length < processLimit) {
+    const res = await fetch(`${API_BASE}/api/channels/${channelId}?limit=${PAGE_SIZE}&offset=${offset}`)
     if (!res.ok) break
     const data = await res.json()
-    const batch = (data.videos ?? []).filter(v => !v.hasTranscript)
+    const allVideos = data.videos ?? []
+    const batch = allVideos.filter(v => !v.hasTranscript)
     stubs.push(...batch)
-    if (batch.length < limit) break
-    offset += limit
+    if (allVideos.length < PAGE_SIZE) break  // no more videos
+    offset += PAGE_SIZE
   }
-  return stubs
+  return stubs.slice(0, processLimit)
 }
 
 async function saveTranscript(videoId, title, duration_seconds, transcript) {
