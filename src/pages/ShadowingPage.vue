@@ -114,7 +114,7 @@ class="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-10
             class="px-2.5 py-1 rounded-full text-sm font-medium transition-colors min-h-[32px]"
             :class="savedWords.has(token.word)
               ? 'bg-orange-600 text-white'
-              : knownWords.has(token.word)
+              : (knownWords.has(token.word) || knownWords.has(token.lemma))
               ? 'border border-blue-500 bg-gray-900 text-blue-400'
               : 'bg-gray-800 text-gray-300 hover:bg-gray-700 active:bg-gray-600'"
             @click.stop="tapWord(token.word)"
@@ -217,7 +217,7 @@ class="absolute bottom-0 left-0 right-0 px-4 pb-3 pt-10
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import VideoClip from '@/components/VideoClip.vue'
 import { getVideo } from '@/services/api.js'
-import { lookupMeaning, wordDifficultyTier } from '@/lib/lookup.js'
+import { lookupMeaning, wordDifficultyTier, canonicalForm } from '@/lib/lookup.js'
 import { scheduleReview, getKnownWords } from '@/composables/useSRS.js'
 
 const CLIP_START_PREBUFFER = 0.3  // seek slightly early to absorb seekTo latency
@@ -330,11 +330,10 @@ const segmentTokens = computed(() => {
   if (!seg?.text) return []
   return seg.text
     .split(/\s+/)
-    .map((display, idx) => ({
-      display,
-      word: display.replace(/[^a-zA-Z'-]/g, '').toLowerCase(),
-      idx,
-    }))
+    .map((display, idx) => {
+      const word = display.replace(/[^a-zA-Z'-]/g, '').toLowerCase()
+      return { display, word, lemma: canonicalForm(word), idx }
+    })
     .filter(t => t.word.length >= 2)  // skip single-char punctuation tokens
 })
 
@@ -379,15 +378,17 @@ watch(() => segments.value.length, (len) => {
 function tapWord(word) {
   if (!word) return
   const seg = currentSegment.value
-  const meaning = lookupMeaning(word)
+  // Normalize to canonical (lemma) form so SRS key matches FeedPage (run, not running)
+  const lemma = canonicalForm(word)
+  const meaning = lookupMeaning(lemma)
 
   const alreadySaved = savedWords.value.has(word)
 
   if (!alreadySaved) {
     const clip_start = +Math.max(0, (seg?.start ?? 0) - 0.3).toFixed(2)
     const clip_end   = +(( seg?.start ?? 0) + (seg?.dur ?? 2) + 0.5).toFixed(2)
-    scheduleReview({
-      id:              `${videoId.value}_${word}`,
+    const card = {
+      id:              `${videoId.value}_${lemma}`,
       video_id:        videoId.value,
       type:            'word',
       keyword:         word,
@@ -399,7 +400,9 @@ function tapWord(word) {
       clip_end,
       sort_order:      0,
       level:           'intermediate',
-    })
+    }
+    if (lemma !== word) card.lemma = lemma
+    scheduleReview(card)
     const newSet = new Set(savedWords.value)
     newSet.add(word)
     savedWords.value = newSet

@@ -154,7 +154,8 @@ async function translateText(text) {
   const cached = transCacheGet(text)
   if (cached) return cached
   const res = await fetch(
-    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${TRANS_LANGPAIR}`
+    `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${TRANS_LANGPAIR}`,
+    { signal: AbortSignal.timeout(5000) }
   )
   const data = await res.json()
   const result = data?.responseData?.translatedText || ''
@@ -163,8 +164,12 @@ async function translateText(text) {
 }
 
 // ── Load card data ────────────────────────────────────────────────────────────
+// Generation counter: incremented on each card change to discard stale in-flight results.
+// Prevents fast-swipe bug where old translation finishes after card has already changed.
+let generation = 0
+
 async function loadCardData() {
-  if (translating.value) return
+  const gen = ++generation
   translating.value = true
   translationText.value = ''
   keywordMeaning.value  = ''
@@ -176,6 +181,7 @@ async function loadCardData() {
       props.card.type === 'word' ? lookupDefinition(props.card.lemma || props.card.keyword) : Promise.resolve(null),
       props.card.sentence ? translateText(props.card.sentence) : Promise.resolve(''),
     ])
+    if (gen !== generation) return  // card changed mid-load — discard stale results
     dictData.value        = dict
     translationText.value = sentence
 
@@ -183,6 +189,7 @@ async function loadCardData() {
     // (~246KB, only needed for words not in Free Dictionary)
     if (!dictData.value?.definition && props.card.type === 'word') {
       const { lookupNgslDef } = await import('@/lib/ngsl.js')
+      if (gen !== generation) return
       const ngslDef = lookupNgslDef(props.card.lemma || props.card.keyword)
       if (ngslDef) {
         dictData.value = { ...(dictData.value || {}), definition: ngslDef }
@@ -200,6 +207,7 @@ async function loadCardData() {
         translateText(lemmaOrKw),
         defText ? translateText(defText) : Promise.resolve(''),
       ])
+      if (gen !== generation) return
       const isGood = (res, src) => res && res.toLowerCase() !== src.toLowerCase()
       const kwGood  = isGood(kwRes, lemmaOrKw)
       const defGood = isGood(defRes, defText || '')
@@ -212,13 +220,16 @@ async function loadCardData() {
     }
 
   } catch {
-    // fail silently
+    // fail silently (network error, timeout, or abort)
   } finally {
-    translating.value = false
+    if (gen === generation) translating.value = false
   }
 }
 
-watch(() => props.card.id, () => loadCardData())
+watch(() => props.card.id, () => {
+  generation++  // invalidate any in-flight load for the previous card
+  loadCardData()
+})
 onMounted(() => loadCardData())
 
 // Expose to parent
