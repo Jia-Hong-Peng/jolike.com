@@ -251,7 +251,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getStreak } from '@/composables/useSRS.js'
 
 const MS_PER_DAY = 86400 * 1000
@@ -487,4 +487,26 @@ function categoryBadgeClass(cat) {
 function goHome() {
   window.location.href = '/'
 }
+
+// ── One-time categories migration ─────────────────────────────────────────────
+// SRS entries created before the categories feature have no `categories` field.
+// Lazy-load getVocabCategories and backfill so category filter tabs show correctly.
+onMounted(async () => {
+  const needsMigration = allEntries.value.some(e => !Array.isArray(e.categories))
+  if (!needsMigration) return
+
+  try {
+    const { getVocabCategories } = await import('@/lib/lookup.js')
+    let changed = false
+    for (const entry of allEntries.value) {
+      if (Array.isArray(entry.categories)) continue
+      entry.categories = getVocabCategories(entry.lemma || entry.word)
+      try {
+        localStorage.setItem(PREFIX + entry.word.toLowerCase(), JSON.stringify(entry))
+        changed = true
+      } catch { /* storage full — skip */ }
+    }
+    if (changed) allEntries.value = [...allEntries.value]  // trigger reactivity
+  } catch { /* non-fatal: migration fails silently */ }
+})
 </script>
