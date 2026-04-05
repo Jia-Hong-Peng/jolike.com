@@ -104,6 +104,7 @@
 import { computed, ref, watch, onMounted } from 'vue'
 import VideoClip from './VideoClip.vue'
 import { lookupDefinition } from '@/composables/useDictionary.js'
+import { lookupNgslDef } from '@/lib/nlp.js'
 
 const props = defineProps({
   card: {
@@ -185,6 +186,14 @@ async function loadCardData() {
     ])
     dictData.value        = dict
     translationText.value = sentence
+
+    // NGSL/TSL fallback: if Free Dictionary has no definition, use NGSL easy English definition
+    if (!dictData.value?.definition && props.card.type === 'word') {
+      const ngslDef = lookupNgslDef(props.card.lemma || props.card.keyword)
+      if (ngslDef) {
+        dictData.value = { ...(dictData.value || {}), definition: ngslDef }
+      }
+    }
 
     // Phase 2: Chinese keyword meaning (parallel: try keyword + definition, pick best)
     // - Translating the keyword directly works for established terms (touchstone→試金石)
@@ -278,7 +287,8 @@ const awlBadgeLabel = computed(() => {
   const s = props.card.awl_sublist
   if (!s) return ''
   if (s <= 10) return `AWL ${s}`  // AWL Sublist 1-10
-  return 'NAWL'                   // New Academic Word List
+  if (s === 11) return 'NAWL'     // New Academic Word List
+  return 'TSL'                    // TOEIC Service List
 })
 
 const awlBadgeTitle = computed(() => {
@@ -287,7 +297,8 @@ const awlBadgeTitle = computed(() => {
   if (s === 1)  return 'Academic Word List — Sublist 1（最高頻學術詞，IELTS/TOEFL 核心）'
   if (s <= 5)   return `Academic Word List — Sublist ${s}（高頻學術詞，IELTS/TOEFL 重要）`
   if (s <= 10)  return `Academic Word List — Sublist ${s}（學術詞彙，IELTS 進階）`
-  return 'New Academic Word List（現代學術語料高頻詞，TOEFL/IELTS 進階）'
+  if (s === 11) return 'New Academic Word List（現代學術語料高頻詞，TOEFL/IELTS 進階）'
+  return 'TOEIC Service List（TOEIC 商業語料高頻詞，覆蓋 TOEIC 98.5%）'
 })
 
 const awlBadgeClass = computed(() => {
@@ -296,6 +307,7 @@ const awlBadgeClass = computed(() => {
   if (s <= 3) return 'bg-amber-900/70 text-amber-300 border border-amber-700'   // AWL 1-3: gold = critical
   if (s <= 7) return 'bg-yellow-900/60 text-yellow-400 border border-yellow-800' // AWL 4-7: yellow = important
   if (s <= 10) return 'bg-stone-800 text-stone-400 border border-stone-600'      // AWL 8-10: muted = useful
-  return 'bg-indigo-900/60 text-indigo-300 border border-indigo-700'             // NAWL: indigo = modern academic
+  if (s === 11) return 'bg-indigo-900/60 text-indigo-300 border border-indigo-700' // NAWL: indigo = modern academic
+  return 'bg-cyan-900/60 text-cyan-300 border border-cyan-700'                    // TSL: cyan = business/TOEIC
 })
 </script>

@@ -25,7 +25,9 @@
 
 import nlp from 'compromise'
 import awlWords from '@/data/coca5000.json'       // business vocab fallback (kept for B2 tier)
-import awlNawlData from '@/data/awl_nawl.json'    // AWL sublist 1-10 + NAWL (11), 1330 entries
+import awlNawlData from '@/data/awl_nawl.json'    // AWL 1-10 + NAWL(11) + TSL(12), 2336 entries
+import ngslDefs from '@/data/ngsl_defs.json'      // NGSL+TSL easy English definitions, 4054 words
+import opalPhrasesData from '@/data/opal_phrases.json' // Oxford OPAL academic phrases, 572 entries
 import cedict from '@/data/cedict.json'
 import cefrVocab from '@/data/cefr_vocab.json'    // CEFR A1-C2 (8818 words, Open Language Profiles)
 
@@ -36,8 +38,18 @@ const cefrMap = cefrVocab
 // Academic word map: word → sublist number
 //   1-10 = AWL sublist (1 = most frequent/important academic, 10 = least)
 //   11   = NAWL (New Academic Word List — modern academic corpus, 288M words)
+//   12   = TSL  (TOEIC Service List — business/commercial English)
 // Research: AWL Sublist 1 gives ~2% IELTS reading coverage per sublist
+//           NGSL + TSL = 98.5% TOEIC coverage (Browne & Culligan 2021)
 const awlNawlMap = awlNawlData   // { word: sublist_num }
+
+// NGSL + TSL easy English definitions: { word: "simple definition" }
+// Source: NGSL 1.2 (2809 words) + TSL 1.2 (1245 TOEIC-only words)
+const ngslDefMap = ngslDefs
+
+// OPAL academic phrases: Set of Oxford Phrasal Academic Lexicon entries
+// 572 academic collocations: "as a result", "in terms of", "based on", etc.
+const opalPhraseSet = new Set(opalPhrasesData)
 
 // Legacy business vocab fallback (kept for coverage of TOEIC/business terms)
 const awlSet = new Set(awlWords.map(w => w.toLowerCase()))
@@ -197,8 +209,8 @@ function wordDifficultyTier(word) {
     }
   }
 
-  // Academic word override: AWL/NAWL words are at least B2 (tier 3)
-  // This ensures important IELTS/TOEFL vocabulary is never hidden at intermediate level.
+  // Academic word override: AWL/NAWL/TSL words are at least B2 (tier 3)
+  // This ensures important IELTS/TOEFL/TOEIC vocabulary is never hidden at intermediate level.
   // Note: tier 4 (C1+) is preserved — we only bump UP, never down.
   const sublist = awlSublist(w)
   if (sublist > 0) {
@@ -235,23 +247,34 @@ function learningScore(word, freq, posMult = 1.0) {
   const tier = wordDifficultyTier(word)
   const cedictBoost = cedict[word] ? 1.2 : 1.0
 
-  // AWL sublist priority bonus (research-backed: sublist 1 = highest IELTS coverage)
-  // Formula: sublist 1 → +4.0pts, sublist 5 → +2.0pts, sublist 10 → +0.4pts, NAWL → +0.5pts
-  // Ensures critical academic vocabulary (assess, constitute, criteria) surfaces first.
+  // Priority bonus by source list (research-backed):
+  //   AWL Sublist 1 → +4.0pts (highest IELTS coverage, ~2% per sublist)
+  //   AWL Sublist 10 → +0.4pts
+  //   NAWL (11) → +0.5pts (modern academic: methodology, trajectory)
+  //   TSL (12) → +1.0pts (TOEIC business: quarterly, negotiate, invoice)
   const sub = awlSublist(word)
   const awlBoost = sub >= 1 && sub <= 10
-    ? (11 - sub) * 0.4   // AWL: sublist 1=4.0, sublist 10=0.4
+    ? (11 - sub) * 0.4   // AWL: S1=4.0, S5=2.4, S10=0.4
     : sub === 11
-      ? 0.5              // NAWL: modest boost (modern academic, empirical, paradigm)
-      : 0
+      ? 0.5              // NAWL: modern academic vocab
+      : sub === 12
+        ? 1.0            // TSL: TOEIC commercial/business vocab
+        : 0
 
-  // Tier is the primary signal (scale 10–40). Frequency + POS + cedict + AWL are secondary.
+  // Tier is the primary signal (scale 10–40). Frequency + POS + cedict + academic lists are secondary.
   return tier * 10 + Math.log1p(freq) * posMult * cedictBoost + awlBoost
 }
 
 export function lookupMeaning(keyword) {
   const key = keyword.toLowerCase()
   return cedict[key] || cedict[key.replace(/-/g, ' ')] || ''
+}
+
+// NGSL/TSL easy English definition — used as fallback when Free Dictionary API
+// definition is unavailable. Returns empty string if not in NGSL/TSL.
+export function lookupNgslDef(keyword) {
+  const key = keyword.toLowerCase()
+  return ngslDefMap[key] || ngslDefMap[key.replace(/-/g, ' ')] || ''
 }
 
 function getClip(segment) {
@@ -398,10 +421,16 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
     }
   }
 
+  // OPAL (Oxford Phrasal Academic Lexicon) boost: +3pts for recognized academic collocations
+  // "as a result", "in terms of", "based on" etc. are high-value for IELTS/TOEFL writing.
+  function phraseScore(phrase, freq) {
+    return learningScore(phrase, freq) + (opalPhraseSet.has(phrase) ? 3.0 : 0)
+  }
+
   const rankedPhrases = [...phraseFreq.entries()]
     // Only keep phrases where at least one word is B1+ (tier ≥ 2) — filters noise
     .filter(([phrase]) => phrase.split(' ').some(w => wordDifficultyTier(w) >= 2))
-    .sort((a, b) => learningScore(b[0], b[1]) - learningScore(a[0], a[1]))
+    .sort((a, b) => phraseScore(b[0], b[1]) - phraseScore(a[0], a[1]))
 
   const phrases = []
   for (const [phrase, freq] of rankedPhrases) {
