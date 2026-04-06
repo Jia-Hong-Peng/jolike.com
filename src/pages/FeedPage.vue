@@ -278,9 +278,12 @@ onMounted(async () => {
       const matchesFw = c => (c.keyword ?? '').toLowerCase() === fw || (c.lemma ?? '').toLowerCase() === fw
       const found = items.some(matchesFw)
       if (!found) {
-        const allItems = extractLearningItems(data.transcript, videoId, 'beginner', new Set())
-        const focusCard = allItems.find(matchesFw)
-        if (focusCard) items = [focusCard, ...items]
+        // Try tier 3-4 (intermediate) first for academic/B2+ words, then tier 1-2 (beginner) for basic words
+        for (const fallbackLevel of ['intermediate', 'beginner']) {
+          const allItems = extractLearningItems(data.transcript, videoId, fallbackLevel, new Set())
+          const focusCard = allItems.find(matchesFw)
+          if (focusCard) { items = [focusCard, ...items]; break }
+        }
       }
       focusIdx = items.findIndex(matchesFw)
     }
