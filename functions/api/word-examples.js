@@ -39,12 +39,11 @@ export async function onRequestGet(context) {
       .prepare(`
         SELECT DISTINCT vv.video_id
         FROM video_vocab vv, json_each(vv.words) je
+        JOIN videos v ON v.id = vv.video_id
         WHERE vv.list_id = ?
           AND LOWER(je.value) = ?
-          AND EXISTS (
-            SELECT 1 FROM videos v
-            WHERE v.id = vv.video_id AND v.deleted_at IS NULL
-          )
+          AND v.deleted_at IS NULL
+          AND v.raw_transcript IS NOT NULL
         LIMIT ?
       `)
       .bind(listId, lw, MAX_VIDEOS)
