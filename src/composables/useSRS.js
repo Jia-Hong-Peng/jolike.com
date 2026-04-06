@@ -138,6 +138,49 @@ function recordStreakToday() {
 }
 
 /**
+ * Mark a word string directly as mastered — no card object needed.
+ * Used by inline leaderboard toggles.
+ * @param {string} word
+ * @param {string} [meaningZh]
+ */
+export function markWordKnown(word, meaningZh = '') {
+  const key = wordKey(word)
+  const existing = readEntry(key)
+  writeEntry(key, {
+    word,
+    meaning_zh: meaningZh,
+    videoId: '',
+    type: 'word',
+    difficulty_tier: 4,
+    sentence: '',
+    clip_start: 0,
+    clip_end: 0,
+    categories: [],
+    ...(existing ?? {}),
+    interval: MAX_INTERVAL_DAYS,
+    nextReview: Date.now() + MAX_INTERVAL_DAYS * MS_PER_DAY,
+    reviews: (existing?.reviews ?? 0) + 1,
+  })
+  recordStreakToday()
+}
+
+/**
+ * Reset a word back to learning (我不熟) — inline toggle.
+ * @param {string} word
+ */
+export function markWordUnsure(word) {
+  const key = wordKey(word)
+  const existing = readEntry(key)
+  if (!existing) return
+  writeEntry(key, {
+    ...existing,
+    interval: 1,
+    nextReview: Date.now() + MS_PER_DAY,
+    reviews: (existing.reviews ?? 0) + 1,
+  })
+}
+
+/**
  * Immediately mark a word as mastered (我會了).
  * Sets interval to MAX so getSrsStatus() returns 'mastered' right away.
  * Creates entry if it doesn't exist yet.

@@ -116,12 +116,10 @@
         <div
           v-for="(item, idx) in words"
           :key="item.word"
-          class="flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer
-                 transition-colors active:scale-95"
-          :class="getSrsStatus(item.word) === 'mastered'
-            ? 'bg-gray-900/50 hover:bg-gray-800/60 opacity-60'
-            : 'bg-gray-900 hover:bg-gray-800'"
-          @click="openWord(item.word)"
+          class="flex items-center gap-2 rounded-xl px-3 py-3 transition-colors"
+          :class="srsStatuses[item.word] === 'mastered'
+            ? 'bg-gray-900/50 opacity-60'
+            : 'bg-gray-900'"
         >
           <!-- Rank -->
           <span
@@ -131,26 +129,13 @@
             {{ idx + 1 }}
           </span>
 
-          <!-- Bar (visual weight) -->
-          <div class="flex-1 min-w-0">
+          <!-- Word + bar (clickable to navigate) -->
+          <div class="flex-1 min-w-0 cursor-pointer" @click="openWord(item.word)">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="font-semibold text-sm"
-                :class="getSrsStatus(item.word) === 'mastered' ? 'text-gray-400 line-through' : 'text-white'"
+                :class="srsStatuses[item.word] === 'mastered' ? 'text-gray-400 line-through' : 'text-white'"
               >{{ item.word }}</span>
               <span class="text-gray-500 text-xs">{{ lookupMeaning(item.word) }}</span>
-              <!-- SRS status badge -->
-              <span v-if="getSrsStatus(item.word) === 'mastered'"
-                class="text-xs px-1.5 py-0.5 rounded-full bg-green-900/70 text-green-400 font-medium flex-shrink-0">
-                ✓ 已學會
-              </span>
-              <span v-else-if="getSrsStatus(item.word) === 'familiar'"
-                class="text-xs px-1.5 py-0.5 rounded-full bg-teal-900/70 text-teal-400 font-medium flex-shrink-0">
-                ✓ 熟悉中
-              </span>
-              <span v-else-if="getSrsStatus(item.word) === 'learning'"
-                class="text-xs px-1.5 py-0.5 rounded-full bg-yellow-900/60 text-yellow-500 font-medium flex-shrink-0">
-                學習中
-              </span>
             </div>
             <div class="mt-1 h-1 bg-gray-800 rounded-full overflow-hidden">
               <div
@@ -162,7 +147,20 @@
           </div>
 
           <!-- Count -->
-          <span class="text-gray-400 text-xs flex-shrink-0">{{ item.video_count }} 部</span>
+          <span class="text-gray-500 text-xs flex-shrink-0">{{ item.video_count }} 部</span>
+
+          <!-- Inline mastery toggle button -->
+          <button
+            class="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center
+                   text-sm font-bold transition-all active:scale-90"
+            :class="srsStatuses[item.word] === 'mastered'
+              ? 'bg-green-800/80 text-green-300'
+              : 'bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-white'"
+            :title="srsStatuses[item.word] === 'mastered' ? '取消：我不熟' : '我會了'"
+            @click.stop="toggleMastery(item.word)"
+          >
+            {{ srsStatuses[item.word] === 'mastered' ? '✓' : '+' }}
+          </button>
         </div>
       </div>
     </div>
@@ -174,6 +172,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { getVocabStats } from '@/services/api.js'
 import { VOCAB_LISTS, getSrsStatus } from '@/lib/vocabLists.js'
 import { lookupMeaning } from '@/lib/lookup.js'
+import { markWordKnown, markWordUnsure } from '@/composables/useSRS.js'
 
 // ── Difficulty config ────────────────────────────────────────────────────────
 
@@ -269,8 +268,28 @@ const visibleDifficultyLevels = computed(() => {
 
 const maxCount = computed(() => words.value[0]?.video_count ?? 1)
 
+// Reactive SRS status map — updated inline without page reload
+const srsStatuses = ref({})
+
+function syncSrsStatuses() {
+  const map = {}
+  for (const item of words.value) map[item.word] = getSrsStatus(item.word)
+  srsStatuses.value = map
+}
+
+function toggleMastery(word) {
+  const current = srsStatuses.value[word] ?? 'new'
+  if (current === 'mastered') {
+    markWordUnsure(word)
+    srsStatuses.value = { ...srsStatuses.value, [word]: 'learning' }
+  } else {
+    markWordKnown(word, lookupMeaning(word))
+    srsStatuses.value = { ...srsStatuses.value, [word]: 'mastered' }
+  }
+}
+
 const masteredCount = computed(() =>
-  words.value.filter(item => getSrsStatus(item.word) === 'mastered').length
+  Object.values(srsStatuses.value).filter(s => s === 'mastered').length
 )
 const masteryPercent = computed(() =>
   words.value.length ? Math.round((masteredCount.value / words.value.length) * 100) : 0
@@ -320,11 +339,13 @@ async function load() {
           selectedList.value = best
           const retry = await getVocabStats(best, 100)
           words.value = retry.words ?? []
+          syncSrsStatuses()
           return
         }
       }
     }
     words.value = w
+    syncSrsStatuses()
   } catch {
     error.value = '載入失敗，請稍後再試'
   } finally {
