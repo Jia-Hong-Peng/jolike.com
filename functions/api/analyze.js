@@ -80,22 +80,15 @@ export async function onRequestPost(context) {
 
   console.log(`[analyze] ${videoId} fetchTranscript result=${result.error ?? 'ok'} segments=${result.transcript?.length ?? 0}`)
 
-  // RATE_LIMITED = Cloudflare IP blocked by YouTube (429). Treat same as stub — save & queue.
+  // RATE_LIMITED = Cloudflare IP blocked by YouTube (429). Save as stub for local batch processing.
   if (result.error === 'RATE_LIMITED') {
     if (!isStub) {
-      // Save as stub so GitHub Actions can pick it up
       await saveVideo(DB, { id: videoId, title, duration_seconds: 0, transcript: [] }).catch(() => {})
     }
-    triggerGithubFetch(env, cached?.channel_id ?? null).catch(() => {})
     return jsonError(422, 'TRANSCRIPT_PENDING', '字幕準備中，請稍候 1-2 分鐘再試')
   }
 
   if (result.error === 'NO_CAPTIONS') {
-    // Stub + NO_CAPTIONS: Cloudflare IP may still be blocked (non-429 rejection). Auto-trigger.
-    if (isStub) {
-      triggerGithubFetch(env, cached.channel_id).catch(() => {})
-      return jsonError(422, 'TRANSCRIPT_PENDING', '字幕準備中，請稍候 1-2 分鐘再試')
-    }
     return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
   }
   if (result.error) {
@@ -143,30 +136,6 @@ async function fetchOEmbedTitle(videoId) {
   } catch {
     return ''
   }
-}
-
-/**
- * Fire-and-forget: trigger GitHub Actions to fetch transcripts for a channel.
- * Uses the same workflow as the admin UI button.
- */
-async function triggerGithubFetch(env, channelId) {
-  const token = env.GITHUB_TOKEN
-  if (!token) return
-  const body = { ref: 'main', inputs: { limit: '50' } }
-  if (channelId) body.inputs.channel = channelId
-  await fetch(
-    'https://api.github.com/repos/Jia-Hong-Peng/jolike.com/actions/workflows/fetch-transcripts.yml/dispatches',
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        'User-Agent': 'jolike.com',
-      },
-      body: JSON.stringify(body),
-    }
-  )
 }
 
 function jsonOk(data) {

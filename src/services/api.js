@@ -191,22 +191,6 @@ export async function importChannelVideosPage(channelId, page = 0) {
   return data  // { page, imported, total_so_far, hasMore }
 }
 
-/**
- * Trigger GitHub Actions "Fetch Channel Transcripts" workflow.
- * GitHub IPs are not blocked by YouTube; Cloudflare Worker IPs are.
- *
- * @param {string} [channelId] - specific channel, or omit for all
- */
-export async function triggerGithubFetch(channelId) {
-  const res = await fetch(`${BASE}/api/admin/trigger-fetch`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channelId }),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw { error: data.error || 'TRIGGER_FAILED', message: data.message || '觸發失敗' }
-  return data
-}
 
 export async function getChannelVideos(channelId, { limit = 200, offset = 0 } = {}) {
   const res = await fetch(`${BASE}/api/channels/${channelId}?limit=${limit}&offset=${offset}`)
