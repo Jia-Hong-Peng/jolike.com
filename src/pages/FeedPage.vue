@@ -275,13 +275,14 @@ onMounted(async () => {
     let focusIdx = -1
     if (focusWord) {
       const fw = focusWord.toLowerCase()
-      const found = items.some(c => (c.keyword ?? '').toLowerCase() === fw)
+      const matchesFw = c => (c.keyword ?? '').toLowerCase() === fw || (c.lemma ?? '').toLowerCase() === fw
+      const found = items.some(matchesFw)
       if (!found) {
         const allItems = extractLearningItems(data.transcript, videoId, 'beginner', new Set())
-        const focusCard = allItems.find(c => (c.keyword ?? '').toLowerCase() === fw)
+        const focusCard = allItems.find(matchesFw)
         if (focusCard) items = [focusCard, ...items]
       }
-      focusIdx = items.findIndex(c => (c.keyword ?? '').toLowerCase() === fw)
+      focusIdx = items.findIndex(matchesFw)
     }
 
     if (items.length === 0) {
