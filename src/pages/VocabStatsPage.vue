@@ -309,7 +309,7 @@ function selectList(id) {
 }
 
 function openWord(word) {
-  window.location.href = `/vocab-study/?list=${selectedList.value}&word=${encodeURIComponent(word)}`
+  window.location.href = `/vocab-study/?list=${selectedList.value}&word=${encodeURIComponent(word)}&from=/vocab-stats/`
 }
 
 function goHome() {
