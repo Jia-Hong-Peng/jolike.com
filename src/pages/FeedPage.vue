@@ -233,7 +233,9 @@ const cardTranslateStyle = computed(() => {
 })
 
 // --- Session composable (US3) ---
-const videoId = new URLSearchParams(window.location.search).get('v') || ''
+const _feedParams = new URLSearchParams(window.location.search)
+const videoId   = _feedParams.get('v') || ''
+const focusWord = _feedParams.get('word') || ''  // jump to specific word when coming from vocab-study
 const {
   currentIndex,
   markCard,
@@ -266,7 +268,23 @@ onMounted(async () => {
     transcript.value = data.transcript
     const { extractLearningItems } = await import('@/lib/nlp.js')
     const knownWords = getKnownWords()
-    const items = extractLearningItems(data.transcript, videoId, level.value, knownWords)
+    let items = extractLearningItems(data.transcript, videoId, level.value, knownWords)
+
+    // If a focusWord is requested (from vocab-study related video click),
+    // ensure it appears by re-extracting with 'beginner' level if not found.
+    if (focusWord) {
+      const fw = focusWord.toLowerCase()
+      const found = items.some(c => (c.keyword ?? '').toLowerCase() === fw)
+      if (!found) {
+        const allItems = extractLearningItems(data.transcript, videoId, 'beginner', new Set())
+        const focusCard = allItems.find(c => (c.keyword ?? '').toLowerCase() === fw)
+        if (focusCard) items = [focusCard, ...items]
+      }
+      // Jump to focusWord card after setting cards
+      const focusIdx = items.findIndex(c => (c.keyword ?? '').toLowerCase() === fw)
+      if (focusIdx > 0) setTimeout(() => jumpTo(focusIdx), 0)
+    }
+
     if (items.length === 0) {
       if (knownWords.size > 0) {
         allMastered.value = true

@@ -181,7 +181,7 @@
               <a
                 v-for="v in relatedVideos"
                 :key="v.id"
-                :href="`/feed/?v=${v.id}`"
+                :href="`/feed/?v=${v.id}&word=${encodeURIComponent(currentCard?.keyword ?? '')}`"
                 class="flex-shrink-0 flex flex-col gap-1"
               >
                 <img
