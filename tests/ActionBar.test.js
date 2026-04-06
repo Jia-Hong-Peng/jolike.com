@@ -13,12 +13,13 @@ describe('ActionBar — rendering', () => {
     expect(wrapper.text()).toContain('▶')
   })
 
-  it('T-AB-2 — all three buttons have min-h-[44px] for touch target', () => {
+  it('T-AB-2 — all four buttons have min-h-[44px] for touch target', () => {
     const wrapper = mount(ActionBar, {
       props: { cardId: 'vid1_run', status: null, canGoPrev: true },
     })
     const buttons = wrapper.findAll('button')
-    expect(buttons.length).toBe(3)
+    // ActionBar has 4 buttons: prev (◀), unsure (我不熟), known (我會了), next (▶)
+    expect(buttons.length).toBe(4)
     for (const btn of buttons) {
       expect(btn.classes()).toContain('min-h-[44px]')
     }
@@ -28,7 +29,8 @@ describe('ActionBar — rendering', () => {
     const wrapper = mount(ActionBar, {
       props: { cardId: 'vid1_run', status: 'known', canGoPrev: false },
     })
-    const knownBtn = wrapper.findAll('button')[1]  // middle button
+    // Button order: prev(0), unsure(1), known(2), next(3)
+    const knownBtn = wrapper.findAll('button')[2]
     expect(knownBtn.classes()).toContain('bg-green-600')
   })
 
@@ -63,7 +65,8 @@ describe('ActionBar — events', () => {
     const wrapper = mount(ActionBar, {
       props: { cardId: 'vid1_run', status: null, canGoPrev: false },
     })
-    await wrapper.findAll('button')[1].trigger('click')
+    // Button order: prev(0), unsure(1), known(2), next(3)
+    await wrapper.findAll('button')[2].trigger('click')
     const emitted = wrapper.emitted('mark')
     expect(emitted).toBeTruthy()
     expect(emitted[0][0]).toEqual({ id: 'vid1_run', status: 'known' })
@@ -73,7 +76,8 @@ describe('ActionBar — events', () => {
     const wrapper = mount(ActionBar, {
       props: { cardId: 'vid1_run', status: null, canGoPrev: false },
     })
-    await wrapper.findAll('button')[2].trigger('click')
+    // Button order: prev(0), unsure(1), known(2), next(3)
+    await wrapper.findAll('button')[3].trigger('click')
     expect(wrapper.emitted('next')).toBeTruthy()
   })
 
@@ -89,7 +93,8 @@ describe('ActionBar — events', () => {
     const wrapper = mount(ActionBar, {
       props: { cardId: 'vid2_accomplish', status: null, canGoPrev: false },
     })
-    await wrapper.findAll('button')[1].trigger('click')
+    // Button order: prev(0), unsure(1), known(2), next(3) — click known
+    await wrapper.findAll('button')[2].trigger('click')
     expect(wrapper.emitted('mark')[0][0].id).toBe('vid2_accomplish')
   })
 })
