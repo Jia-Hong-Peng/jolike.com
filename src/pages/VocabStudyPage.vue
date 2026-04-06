@@ -219,7 +219,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import ActionBar from '@/components/ActionBar.vue'
 import { VOCAB_LISTS, getListMeta, loadWordList, generateVocabCards } from '@/lib/vocabLists.js'
 import { useLearningSession } from '@/composables/useLearningSession.js'
-import { scheduleReview, getDue } from '@/composables/useSRS.js'
+import { scheduleReview, markReview, getDue } from '@/composables/useSRS.js'
 import { lookupDefinition } from '@/composables/useDictionary.js'
 import { useTTS } from '@/composables/useTTS.js'
 import { getVocabVideos } from '@/services/api.js'
@@ -396,7 +396,7 @@ function onTouchEnd(e) {
     animateCardOut(() => {
       const card = currentCard.value
       markCard(card?.id, 'known')
-      if (card) scheduleReview(card)
+      if (card) advanceSrs(card, 'known')
       next()
     })
   }
@@ -407,11 +407,21 @@ function animateCardOut(callback) {
   setTimeout(() => { translateY.value = 0; callback() }, 300)
 }
 
+// Push SRS forward: first encounter → scheduleReview; revisit → markReview
+function advanceSrs(card, outcome) {
+  if (!card) return
+  if (card._srsStatus === 'new') {
+    scheduleReview(card)
+  } else {
+    markReview(card.keyword, outcome)
+  }
+}
+
 // ── ActionBar handlers ────────────────────────────────────────────────────────
 function onMark({ id, status }) {
   const card = currentCard.value
   markCard(id, status)
-  if (card) scheduleReview(card)
+  if (card) advanceSrs(card, status === 'known' ? 'known' : 'unsure')
   animateCardOut(() => next())
 }
 
@@ -419,7 +429,7 @@ function onPrev() { animateCardOut(() => prev()) }
 
 function onNext() {
   const card = currentCard.value
-  if (card) scheduleReview(card)
+  if (card) scheduleReview(card)   // just seen = create entry if new, no interval change
   animateCardOut(() => next())
 }
 
@@ -430,11 +440,11 @@ function onKeyDown(e) {
     e.preventDefault()
     const card = currentCard.value
     markCard(card?.id, 'known')
-    if (card) scheduleReview(card)
+    if (card) advanceSrs(card, 'known')
     animateCardOut(() => next())
   } else if (e.key === 'ArrowDown') {
     e.preventDefault()
-    if (currentCard.value) scheduleReview(currentCard.value)
+    if (currentCard.value) advanceSrs(currentCard.value, 'unsure')
     animateCardOut(() => next())
   } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
     e.preventDefault()
