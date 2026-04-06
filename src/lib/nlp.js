@@ -205,12 +205,14 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
   }
 
   // Adaptive fallback: cascade min down (or max up for beginner) until enough words
+  // advanced/intermediate never fall below tier 2 — per docs: "fallback to tier 3 → 2 if sparse"
+  const fallbackFloor = level === 'beginner' ? 1 : 2
   let rankedWords = rankWords(minTier, maxTier)
   while (rankedWords.length < MIN_WORDS_BEFORE_FALLBACK) {
-    if (minTier > 1) {
+    if (minTier > fallbackFloor) {
       minTier -= 1
     } else {
-      break  // already at widest range
+      break  // already at widest range for this level
     }
     rankedWords = rankWords(minTier, maxTier)
   }

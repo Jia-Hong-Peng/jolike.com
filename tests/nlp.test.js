@@ -80,13 +80,15 @@ describe('nlp.js — lemma field for base/canonical form', () => {
     if (card) expect(card.lemma).toBe('chaperone')
   })
 
-  it('T-LEMMA-2 — running card keeps keyword=running, lemma=run', () => {
+  it('T-LEMMA-2 — running has no lemma (running is itself in cefrMap, so canonical = running)', () => {
     const items = extractLearningItems(
       makeTranscript(['She is running towards the remarkable analysis of the situation.']),
       'v1', 'beginner'
     )
     const card = items.find(i => i.keyword === 'running')
-    if (card) expect(card.lemma).toBe('run')
+    // 'running' is directly in cefrMap, so canonicalForm('running') = 'running' (not 'run')
+    // → lemma is undefined (no separate base form needed)
+    if (card) expect(card.lemma).toBeUndefined()
   })
 
   it('T-LEMMA-3 — analysis has no lemma (already base form)', () => {
