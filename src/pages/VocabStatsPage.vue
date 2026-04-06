@@ -102,8 +102,11 @@
         <div
           v-for="(item, idx) in words"
           :key="item.word"
-          class="flex items-center gap-3 bg-gray-900 rounded-xl px-4 py-3 cursor-pointer
-                 hover:bg-gray-800 transition-colors active:scale-95"
+          class="flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer
+                 transition-colors active:scale-95"
+          :class="getSrsStatus(item.word) === 'mastered'
+            ? 'bg-gray-900/50 hover:bg-gray-800/60 opacity-60'
+            : 'bg-gray-900 hover:bg-gray-800'"
           @click="openWord(item.word)"
         >
           <!-- Rank -->
@@ -116,9 +119,24 @@
 
           <!-- Bar (visual weight) -->
           <div class="flex-1 min-w-0">
-            <div class="flex items-baseline gap-2">
-              <span class="text-white font-semibold text-sm">{{ item.word }}</span>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-semibold text-sm"
+                :class="getSrsStatus(item.word) === 'mastered' ? 'text-gray-400 line-through' : 'text-white'"
+              >{{ item.word }}</span>
               <span class="text-gray-500 text-xs">{{ lookupMeaning(item.word) }}</span>
+              <!-- SRS status badge -->
+              <span v-if="getSrsStatus(item.word) === 'mastered'"
+                class="text-xs px-1.5 py-0.5 rounded-full bg-green-900/70 text-green-400 font-medium flex-shrink-0">
+                ✓ 已學會
+              </span>
+              <span v-else-if="getSrsStatus(item.word) === 'familiar'"
+                class="text-xs px-1.5 py-0.5 rounded-full bg-teal-900/70 text-teal-400 font-medium flex-shrink-0">
+                ✓ 熟悉中
+              </span>
+              <span v-else-if="getSrsStatus(item.word) === 'learning'"
+                class="text-xs px-1.5 py-0.5 rounded-full bg-yellow-900/60 text-yellow-500 font-medium flex-shrink-0">
+                學習中
+              </span>
             </div>
             <div class="mt-1 h-1 bg-gray-800 rounded-full overflow-hidden">
               <div
@@ -140,7 +158,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getVocabStats } from '@/services/api.js'
-import { VOCAB_LISTS } from '@/lib/vocabLists.js'
+import { VOCAB_LISTS, getSrsStatus } from '@/lib/vocabLists.js'
 import { lookupMeaning } from '@/lib/lookup.js'
 
 // ── Difficulty config ────────────────────────────────────────────────────────
