@@ -194,7 +194,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import LearningCard from '@/components/LearningCard.vue'
 import ActionBar from '@/components/ActionBar.vue'
 import VocabList from '@/components/VocabList.vue'
@@ -272,6 +272,7 @@ onMounted(async () => {
 
     // If a focusWord is requested (from vocab-study related video click),
     // ensure it appears by re-extracting with 'beginner' level if not found.
+    let focusIdx = -1
     if (focusWord) {
       const fw = focusWord.toLowerCase()
       const found = items.some(c => (c.keyword ?? '').toLowerCase() === fw)
@@ -280,9 +281,7 @@ onMounted(async () => {
         const focusCard = allItems.find(c => (c.keyword ?? '').toLowerCase() === fw)
         if (focusCard) items = [focusCard, ...items]
       }
-      // Jump to focusWord card after setting cards
-      const focusIdx = items.findIndex(c => (c.keyword ?? '').toLowerCase() === fw)
-      if (focusIdx > 0) setTimeout(() => jumpTo(focusIdx), 0)
+      focusIdx = items.findIndex(c => (c.keyword ?? '').toLowerCase() === fw)
     }
 
     if (items.length === 0) {
@@ -293,6 +292,10 @@ onMounted(async () => {
       }
     } else {
       cards.value = items
+      if (focusIdx >= 0) {
+        await nextTick()
+        jumpTo(focusIdx)
+      }
     }
 
     // Background: scan full transcript against all vocab lists and store index
