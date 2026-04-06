@@ -134,6 +134,9 @@ def fetch_via_ytdlp(video_id):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         url = f'https://www.youtube.com/watch?v={video_id}'
+        has_cookies = bool(COOKIES_PATH and os.path.isfile(COOKIES_PATH))
+        # android/ios clients don't support cookies; use web when cookies present
+        player_client = 'web' if has_cookies else 'android,ios,web'
         cmd = [
             'yt-dlp',
             '--skip-download',
@@ -143,9 +146,9 @@ def fetch_via_ytdlp(video_id):
             '--sub-format', 'json3',
             '--output', f'{tmpdir}/%(id)s',
             '--no-playlist',
-            '--extractor-args', 'youtube:player_client=android,ios,web',
+            '--extractor-args', f'youtube:player_client={player_client}',
         ]
-        if COOKIES_PATH and os.path.isfile(COOKIES_PATH):
+        if has_cookies:
             cmd.extend(['--cookies', COOKIES_PATH])
         cmd.append(url)
         try:

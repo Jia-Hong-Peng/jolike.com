@@ -50,17 +50,49 @@ args = parser.parse_args()
 
 DOMAINS = ['.youtube.com', '.google.com', 'youtube.com', 'google.com']
 
-print("Reading YouTube/Google cookies from Chrome...")
-print("(Chrome can stay open — this reads a copy of the cookie database)")
+AUTH_COOKIES = {'SID', 'SSID', 'HSID', 'APISID', 'SAPISID',
+                '__Secure-1PSID', '__Secure-3PSID', '__Secure-1PAPISID', '__Secure-3PAPISID'}
 
+def try_browser(name, fn):
+    try:
+        cj = fn(domain_name='.youtube.com')
+        cookies = list(cj)
+        auth_found = {c.name for c in cookies if c.name in AUTH_COOKIES}
+        print(f"  {name}: {len(cookies)} cookies, auth={sorted(auth_found) or 'NONE (not logged in)'}")
+        return cookies, auth_found
+    except Exception as e:
+        print(f"  {name}: unavailable ({e})")
+        return [], set()
+
+print("Reading YouTube/Google cookies from browsers...")
+print("(You may see a macOS Keychain permission dialog — click Allow)")
+print()
+
+browsers = [
+    ("Chrome",  browser_cookie3.chrome),
+    ("Firefox", browser_cookie3.firefox),
+]
 try:
-    cj = browser_cookie3.chrome(domain_name='.youtube.com')
-except Exception as e:
-    print(f"\n❌  Failed to read Chrome cookies: {e}")
-    print("Make sure:")
-    print("  1. Google Chrome is installed")
-    print("  2. You are logged into YouTube in Chrome")
-    sys.exit(1)
+    browsers.append(("Safari", browser_cookie3.safari))
+except AttributeError:
+    pass
+
+best_cookies = []
+best_auth = set()
+for name, fn in browsers:
+    cookies, auth = try_browser(name, fn)
+    if len(auth) > len(best_auth):
+        best_cookies, best_auth = cookies, auth
+
+if not best_auth:
+    print()
+    print("⚠️  No authentication cookies found in any browser.")
+    print("   Visitor-only cookies may not bypass YouTube bot detection.")
+    print("   Make sure you are LOGGED INTO YouTube (youtube.com) in Chrome or Firefox.")
+    print("   Continuing anyway — cookies may still help somewhat.")
+    print()
+
+cj = best_cookies
 
 # Convert to Netscape cookies.txt format (what yt-dlp accepts)
 lines = [
@@ -83,7 +115,7 @@ for cookie in cj:
     count += 1
 
 if count == 0:
-    print("\n❌  No YouTube/Google cookies found in Chrome.")
+    print("\n❌  No YouTube/Google cookies found in any browser.")
     print("Make sure you are logged into YouTube at https://www.youtube.com")
     sys.exit(1)
 
