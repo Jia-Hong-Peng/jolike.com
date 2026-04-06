@@ -31,12 +31,12 @@
       </div>
     </div>
 
-    <!-- Difficulty filter -->
-    <div class="px-4 pt-5 pb-1">
+    <!-- Difficulty filter (only show levels that have data) -->
+    <div v-if="visibleDifficultyLevels.length > 0" class="px-4 pt-5 pb-1">
       <p class="text-gray-600 text-xs mb-2">程度篩選</p>
       <div class="flex gap-2">
         <button
-          v-for="lv in DIFFICULTY_LEVELS"
+          v-for="lv in visibleDifficultyLevels"
           :key="lv.key"
           class="text-sm px-4 py-2 rounded-xl font-medium transition-colors min-h-[40px] flex-1"
           :class="selectedDifficulty === lv.key
@@ -199,6 +199,17 @@ const levelFilteredLists = computed(() => {
   const base = visibleLists.value
   if (selectedDifficulty.value === 'all') return base
   return base.filter(l => LIST_DIFFICULTY[l.id] === selectedDifficulty.value)
+})
+
+// Difficulty levels that have at least one list with data
+const visibleDifficultyLevels = computed(() => {
+  if (!availableLists.value) return DIFFICULTY_LEVELS
+  const available = availableLists.value
+  if (available.length === 0) return []
+  return DIFFICULTY_LEVELS.filter(lv => {
+    if (lv.key === 'all') return true
+    return available.some(id => LIST_DIFFICULTY[id] === lv.key)
+  })
 })
 
 const maxCount = computed(() => words.value[0]?.video_count ?? 1)

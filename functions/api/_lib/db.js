@@ -308,7 +308,14 @@ export async function getVideoStats(DB) {
  */
 export async function getAvailableVocabLists(DB) {
   const { results } = await DB
-    .prepare('SELECT DISTINCT list_id FROM video_vocab')
+    .prepare(`
+      SELECT DISTINCT vv.list_id
+      FROM video_vocab vv
+      WHERE EXISTS (
+        SELECT 1 FROM videos v
+        WHERE v.id = vv.video_id AND v.deleted_at IS NULL
+      )
+    `)
     .all()
   return (results ?? []).map(r => r.list_id)
 }
