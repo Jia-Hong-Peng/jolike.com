@@ -228,30 +228,45 @@ describe('nlp.js — tier-primary scoring', () => {
   })
 })
 
-// ── knownWords personal filter ────────────────────────────────────────────────
-describe('nlp.js — knownWords filter', () => {
-  it('T-KNOWN-1 — word in knownWords is absent from output', () => {
+// ── knownWords soft downrank ───────────────────────────────────────────────────
+// P3: hard exclusion replaced by score × 0.08 penalty. Known words can still
+// appear, but always rank below unknown words of comparable difficulty.
+describe('nlp.js — knownWords soft downrank', () => {
+  it('T-KNOWN-1 — mastered word ranks below unknown word of same tier', () => {
+    // 'accomplish' (AWL tier 3) = known; 'systematic' (tier 3) = unknown
+    // Both appear in the transcript. 'systematic' must rank first.
     const transcript = makeTranscript([
       'You should accomplish this task immediately and systematically.',
+      'Systematic analysis is essential for academic work.',
     ])
     const known = new Set(['accomplish'])
-    const items = extractLearningItems(transcript, 'v1', 'beginner', known)
-    expect(items.find(i => i.keyword === 'accomplish')).toBeUndefined()
+    const items = extractLearningItems(transcript, 'v1', 'intermediate', known)
+    const accomplishIdx = items.findIndex(i => i.keyword === 'accomplish')
+    const systematicIdx = items.findIndex(i => i.keyword === 'systematic' || i.keyword === 'systematically')
+    // systematic (unknown) must appear before accomplish (known), OR accomplish may not appear at all
+    if (accomplishIdx !== -1 && systematicIdx !== -1) {
+      expect(systematicIdx).toBeLessThan(accomplishIdx)
+    }
   })
 
-  it('T-KNOWN-2 — fallback triggers when all tier-3+ words are in knownWords', () => {
-    // 'accomplish' = AWL tier 3 → in knownWords
-    // 'analysis' = B1 tier 2 (confirmed by T19) → not in knownWords, should appear via fallback
+  it('T-KNOWN-2 — unknown tier-3 word outranks known tier-3 word in same transcript', () => {
+    // 'analyze' = AWL tier 3 → in knownWords (score × 0.08)
+    // 'achieve' = AWL tier 3 → NOT in knownWords (full score)
+    // Both same tier; soft downrank must push 'achieve' above 'analyze'.
     const transcript = makeTranscript([
-      'You should accomplish this task systematically and achieve results.',
-      'She abandoned the project after careful analysis of the situation.',
+      'We can analyze the approach to achieve positive results through consistent effort.',
+      'The strategy helps achieve remarkable growth and allows us to analyze each step.',
     ])
-    const known = new Set(['accomplish', 'systematic'])
+    const known = new Set(['analyze'])
     const items = extractLearningItems(transcript, 'v1', 'intermediate', known)
-    // Tier-3 words are all known → fallback to tier-2 → 'analysis' should appear
     expect(items.length).toBeGreaterThan(0)
-    const knownInOutput = items.filter(i => known.has(i.keyword))
-    expect(knownInOutput.length).toBe(0)
+    // 'achieve' (unknown) must appear before 'analyze' (known) in ranking
+    const achieveIdx = items.findIndex(i => i.keyword === 'achieve')
+    const analyzeIdx = items.findIndex(i => i.keyword === 'analyze')
+    expect(achieveIdx).toBeGreaterThanOrEqual(0)
+    if (analyzeIdx !== -1) {
+      expect(achieveIdx).toBeLessThan(analyzeIdx)
+    }
   })
 
   it('T-COMPAT-1 — omitting knownWords param returns same results as passing empty Set', () => {

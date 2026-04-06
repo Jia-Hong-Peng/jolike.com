@@ -196,19 +196,34 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
   // Tier-filtered ranking with range [minTier, maxTier].
   // Both bounds are strict: beginner sees tier 1-2 only, advanced tier 4 only.
   // listBonus in learningScore() handles ordering within the passing set.
+  //
+  // Soft downrank (P3): mastered words (reviews >= 3) are scored at 8% rather than
+  // hard-excluded. This means unknown words always rank above mastered ones, but
+  // mastered words can still surface when the video has very few new vocabulary items.
+  // This handles the "50+ mastered words" edge case where hard exclusion caused heavy
+  // fallback to irrelevant low-tier words.
+  const MASTERY_SCORE_PENALTY = 0.08
   function rankWords(minT, maxT) {
     return [...wordFreq.entries()]
       .filter(([w]) => { const t = wordDifficultyTier(w); return t >= minT && t <= maxT })
-      .filter(([w]) => !knownWords.has(w))
-      .sort((a, b) => learningScore(b[0], b[1], posMultiplier(b[0]))
-                    - learningScore(a[0], a[1], posMultiplier(a[0])))
+      .sort((a, b) => {
+        const isKnownA = knownWords.has(a[0])
+        const isKnownB = knownWords.has(b[0])
+        const sA = learningScore(a[0], a[1], posMultiplier(a[0])) * (isKnownA ? MASTERY_SCORE_PENALTY : 1)
+        const sB = learningScore(b[0], b[1], posMultiplier(b[0])) * (isKnownB ? MASTERY_SCORE_PENALTY : 1)
+        return sB - sA
+      })
   }
 
   // Adaptive fallback: cascade min down (or max up for beginner) until enough words
   // advanced/intermediate never fall below tier 2 — per docs: "fallback to tier 3 → 2 if sparse"
+  // Soft-downrank note: fallback threshold counts only non-mastered words. Mastered words
+  // are still present in rankedWords (at 8% score) but should not prevent the fallback from
+  // pulling in fresh tier-2 vocabulary — which is the whole point of soft downrank.
   const fallbackFloor = level === 'beginner' ? 1 : 2
+  const countNew = (words) => words.filter(([w]) => !knownWords.has(w)).length
   let rankedWords = rankWords(minTier, maxTier)
-  while (rankedWords.length < MIN_WORDS_BEFORE_FALLBACK) {
+  while (countNew(rankedWords) < MIN_WORDS_BEFORE_FALLBACK) {
     if (minTier > fallbackFloor) {
       minTier -= 1
     } else {
@@ -309,9 +324,11 @@ export function extractLearningItems(transcript, videoId, level = 'intermediate'
 
   // ── Step 3: Merge, sort, assign IDs ──────────────────────────────────────────
   return [...words, ...phrases]
-    .sort((a, b) =>
-      learningScore(b.keyword, b.frequency, posMultiplier(b.keyword)) -
-      learningScore(a.keyword, a.frequency, posMultiplier(a.keyword)))
+    .sort((a, b) => {
+      const sA = learningScore(a.keyword, a.frequency, posMultiplier(a.keyword)) * (knownWords.has(a.keyword) ? MASTERY_SCORE_PENALTY : 1)
+      const sB = learningScore(b.keyword, b.frequency, posMultiplier(b.keyword)) * (knownWords.has(b.keyword) ? MASTERY_SCORE_PENALTY : 1)
+      return sB - sA
+    })
     .map((item, index) => ({
       // ID uses lemma (canonical form) so "run" and "running" share the same SRS entry
       id: `${videoId}_${(item.lemma || item.keyword).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
