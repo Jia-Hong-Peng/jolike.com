@@ -1,9 +1,10 @@
 name: Fetch Channel Transcripts
 
-# Why GitHub Actions and not Cloudflare Workers:
-# YouTube silently blocks Cloudflare's Singapore datacenter IPs for watch page requests.
-# GitHub Actions runs on GitHub/Azure IPs which serve different (less restricted) content.
-# We use youtube-transcript-api which handles YouTube's anti-bot measures reliably.
+# NOTE: This workflow has limited effectiveness — YouTube's bot-detection
+# (PO Token requirement) blocks most transcript requests from Azure datacenter IPs.
+# For bulk stub processing, run scripts/fetch-transcripts.py locally instead.
+# This workflow is kept for auto-triggering when individual users hit RATE_LIMITED
+# (triggered by analyze.js) and for occasional small-batch admin use.
 
 on:
   workflow_dispatch:

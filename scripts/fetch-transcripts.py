@@ -3,10 +3,11 @@
 scripts/fetch-transcripts.py
 
 Fetches YouTube transcripts for channel video stubs and saves them via API.
-Uses youtube-transcript-api which handles YouTube's anti-bot measures reliably.
+Must be run locally (residential IP) — YouTube blocks datacenter IPs (GitHub
+Actions Azure IP) with bot-detection that cannot be bypassed without a browser.
 
 Usage:
-  python scripts/fetch-transcripts.py [--channel UCxxxxxx] [--limit 200]
+  python3 scripts/fetch-transcripts.py [--channel UCxxxxxx] [--limit 500]
 
 Required env vars:
   API_BASE      e.g. https://jolike.com
@@ -14,6 +15,9 @@ Required env vars:
 
 Optional env vars:
   DELAY_MS      delay between videos in ms (default: 800)
+
+Dependencies:
+  pip install yt-dlp "youtube-transcript-api==0.6.2"
 """
 
 import argparse
