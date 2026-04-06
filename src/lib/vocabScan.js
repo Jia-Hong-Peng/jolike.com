@@ -49,8 +49,7 @@ export async function scanTranscriptVocab(transcript) {
         const lw = w.toLowerCase()
         return (
           transcriptForms.has(lw) ||
-          transcriptForms.has(canonicalForm(lw)) ||
-          morphStems(lw).some(s => transcriptForms.has(s))
+          transcriptForms.has(canonicalForm(lw))
         )
       })
       if (matched.length > 0) vocab[list.id] = matched
