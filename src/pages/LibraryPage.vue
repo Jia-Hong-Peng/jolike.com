@@ -121,7 +121,7 @@
         class="fixed inset-0 z-50 flex items-end justify-center"
         @click.self="selectedVideo = null"
       >
-        <div class="absolute inset-0 bg-black/60"></div>
+        <div class="absolute inset-0 bg-black/60" @click="selectedVideo = null"></div>
         <div class="relative w-full max-w-sm bg-gray-900 rounded-t-3xl px-5 pt-5 pb-8 space-y-4">
           <!-- Video info -->
           <div class="flex gap-3 items-start">
