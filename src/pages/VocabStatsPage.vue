@@ -151,9 +151,18 @@ async function load() {
   error.value = null
   try {
     const { words: w, stats, available_lists } = await getVocabStats(selectedList.value, 100)
-    words.value = w
     if (stats) siteStats.value = stats
-    if (available_lists) availableLists.value = available_lists
+    if (available_lists) {
+      availableLists.value = available_lists
+      // 若目前選的 list 沒有資料，自動切換到第一個有資料的 list
+      if (available_lists.length > 0 && !available_lists.includes(selectedList.value)) {
+        selectedList.value = available_lists[0]
+        const retry = await getVocabStats(selectedList.value, 100)
+        words.value = retry.words
+        return
+      }
+    }
+    words.value = w
   } catch {
     error.value = '載入失敗，請稍後再試'
   } finally {
