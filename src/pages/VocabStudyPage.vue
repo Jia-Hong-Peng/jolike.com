@@ -54,17 +54,26 @@
         <p class="text-gray-400 text-sm">共 {{ cards.length }} 個單字</p>
       </div>
       <button
+        v-if="fromPage !== '/'"
         class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg min-h-[56px] w-full max-w-xs"
-        @click="() => (window.location.href = '/vocab-study/')"
-      >
-        選擇其他清單
-      </button>
-      <button
-        class="bg-gray-800 text-gray-300 px-8 py-3 rounded-2xl font-semibold min-h-[48px] w-full max-w-xs"
         @click="goHome"
       >
-        回首頁
+        ← 回排行榜
       </button>
+      <template v-else>
+        <button
+          class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-semibold text-lg min-h-[56px] w-full max-w-xs"
+          @click="() => (window.location.href = '/vocab-study/')"
+        >
+          選擇其他清單
+        </button>
+        <button
+          class="bg-gray-800 text-gray-300 px-8 py-3 rounded-2xl font-semibold min-h-[48px] w-full max-w-xs"
+          @click="goHome"
+        >
+          回首頁
+        </button>
+      </template>
     </div>
 
     <!-- ── Study card view ───────────────────────────────────────────────────── -->
@@ -423,6 +432,11 @@ function onMark({ id, status }) {
   const card = currentCard.value
   markCard(id, status)
   if (card) advanceSrs(card, status === 'known' ? 'known' : 'unsure')
+  // Coming from another page (e.g. leaderboard): go back immediately after marking
+  if (fromPage !== '/') {
+    window.location.href = fromPage
+    return
+  }
   animateCardOut(() => next())
 }
 
