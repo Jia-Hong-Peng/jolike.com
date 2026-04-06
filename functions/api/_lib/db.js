@@ -273,6 +273,34 @@ export async function getChannelVideoIds(DB, channelId, { limit = 500, offset = 
 }
 
 /**
+ * Get site-wide video statistics.
+ * @param {D1Database} DB
+ * @returns {Promise<{total: number, with_transcript: number, indexed: number}>}
+ *   total           — all non-deleted videos (including stubs)
+ *   with_transcript — videos that have a real transcript
+ *   indexed         — videos that have at least one vocab_vocab entry
+ */
+export async function getVideoStats(DB) {
+  const [totals, indexedRow] = await Promise.all([
+    DB.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN raw_transcript IS NOT NULL AND raw_transcript != '[]' THEN 1 ELSE 0 END) AS with_transcript
+      FROM videos
+      WHERE deleted_at IS NULL
+    `).first(),
+    DB.prepare(`
+      SELECT COUNT(DISTINCT video_id) AS indexed FROM video_vocab
+    `).first(),
+  ])
+  return {
+    total:           totals?.total           ?? 0,
+    with_transcript: totals?.with_transcript ?? 0,
+    indexed:         indexedRow?.indexed     ?? 0,
+  }
+}
+
+/**
  * Get word frequency rankings across all indexed videos for a given vocab list.
  * Uses json_each to unpack the JSON words array stored in each row.
  * @param {D1Database} DB

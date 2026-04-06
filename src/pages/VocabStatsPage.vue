@@ -13,6 +13,24 @@
       <span class="text-gray-500 text-sm">全站統計</span>
     </div>
 
+    <!-- Site stats -->
+    <div v-if="siteStats" class="mx-4 mt-4 bg-gray-900 rounded-2xl px-5 py-3 flex gap-6">
+      <div class="text-center flex-1">
+        <p class="text-white text-xl font-bold">{{ siteStats.with_transcript.toLocaleString() }}</p>
+        <p class="text-gray-500 text-xs mt-0.5">有字幕影片</p>
+      </div>
+      <div class="w-px bg-gray-800"></div>
+      <div class="text-center flex-1">
+        <p class="text-white text-xl font-bold">{{ siteStats.total.toLocaleString() }}</p>
+        <p class="text-gray-500 text-xs mt-0.5">全站影片</p>
+      </div>
+      <div class="w-px bg-gray-800"></div>
+      <div class="text-center flex-1">
+        <p class="text-white text-xl font-bold">{{ siteStats.indexed.toLocaleString() }}</p>
+        <p class="text-gray-500 text-xs mt-0.5">已建詞彙索引</p>
+      </div>
+    </div>
+
     <!-- List picker -->
     <div class="px-4 pt-5 pb-3">
       <div class="flex gap-2 flex-wrap">
@@ -102,6 +120,7 @@ import { lookupMeaning } from '@/lib/lookup.js'
 const loading      = ref(true)
 const error        = ref(null)
 const words        = ref([])
+const siteStats    = ref(null)
 const selectedList = ref('coca')
 
 const currentListMeta = computed(() => VOCAB_LISTS.find(l => l.id === selectedList.value))
@@ -124,7 +143,9 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    words.value = await getVocabStats(selectedList.value, 100)
+    const { words: w, stats } = await getVocabStats(selectedList.value, 100)
+    words.value = w
+    if (stats) siteStats.value = stats
   } catch {
     error.value = '載入失敗，請稍後再試'
   } finally {

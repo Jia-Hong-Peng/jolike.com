@@ -3,7 +3,7 @@
  * Return word frequency rankings for a vocabulary list across all indexed videos.
  * Words are ranked by how many distinct videos contain them.
  */
-import { getVocabWordRankings } from './_lib/db.js'
+import { getVocabWordRankings, getVideoStats } from './_lib/db.js'
 
 const VALID_LISTS = new Set([
   'coca', 'ngsl', 'toeic', 'bsl', 'ielts', 'toefl',
@@ -26,8 +26,11 @@ export async function onRequestGet(context) {
   }
 
   try {
-    const words = await getVocabWordRankings(DB, listId, limit)
-    return new Response(JSON.stringify({ list: listId, words }), {
+    const [words, stats] = await Promise.all([
+      getVocabWordRankings(DB, listId, limit),
+      getVideoStats(DB),
+    ])
+    return new Response(JSON.stringify({ list: listId, words, stats }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',

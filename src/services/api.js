@@ -224,7 +224,7 @@ export async function getChannelVideos(channelId, { limit = 200, offset = 0 } = 
 export async function getVocabStats(listId, limit = 100) {
   const res = await fetch(`${BASE}/api/vocab-stats?list=${encodeURIComponent(listId)}&limit=${limit}`)
   const data = await res.json().catch(() => ({}))
-  return data.words ?? []
+  return { words: data.words ?? [], stats: data.stats ?? null }
 }
 
 /**
