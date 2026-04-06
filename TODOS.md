@@ -92,36 +92,35 @@ wrangler secret put PUSH_SEND_SECRET
 
 ---
 
-## ✅ DONE — Vue Component Tests
+## ✅ DONE — Vue Component Tests + vocabLists.js Tests
 
-**What:** Composable + component tests using `@vue/test-utils`.
+**What:** Composable + component tests using `@vue/test-utils`, plus vocabLists coverage.
 
-**Status:** SHIPPED — 127 tests total (8 test files), all passing.
+**Status:** SHIPPED — 147 tests total (9 test files), all passing.
 
 **Tests shipped:**
 - `tests/useLearningSession.test.js` (16 tests) — session marks, next/isComplete, jumpTo, localStorage persistence
 - `tests/useDictionary.test.js` (9 tests) — cache read/write, phrase skip, network failure
 - `tests/ActionBar.test.js` (10 tests) — render, touch targets, mark event emission (4-button layout)
 - `tests/useSRS.test.js` (25 tests) — SRS algorithm, streak, getKnownWords
-- `tests/nlp.test.js` (49 tests) — NLP algorithm, CEFR tier, lemma, fallback
+- `tests/nlp.test.js` (49 tests) — NLP algorithm, CEFR tier, lemma, fallback, soft downrank
 - `tests/HighlightedSentence.test.js` (8 tests) — sentence highlighting component
 - `tests/LearningCard.test.js` (6 tests) — card render and interaction
 - `tests/useShadowing.test.js` (4 tests) — shadowing mode composable
+- `tests/vocabLists.test.js` (20 tests) — getSrsStatus, getListMeta, generateVocabCards, loadWordList
 
 **Note:** `analyze.js` oEmbed scenarios deferred (requires Miniflare environment).
 
 ---
 
-## P3 — Known-Words Soft Downrank (deferred from NLP algorithm rethink)
+## ✅ DONE — P3 Known-Words Soft Downrank
 
-**What:** Replace hard exclusion (`!knownWords.has(w)`) with soft downrank: mastered words still eligible but with score penalty (e.g., `× 0.1`), combined with time-decay based on interval.
+**What:** Replace hard exclusion (`!knownWords.has(w)`) with soft downrank: mastered words still eligible but scored at × 0.08 penalty (MASTERY_SCORE_PENALTY). Unknown words always rank above mastered words of the same tier.
 
-**Why:** Hard exclusion works well for small vocabularies (MVP). For users with 50+ mastered words, it aggressively filters high-quality words and over-relies on fallback/low-tier words. Soft downrank would let mastered words still appear occasionally (spaced repetition value) while strongly preferring new words.
+**Status:** SHIPPED — PR #3. Bug fixed: the penalty was applied in `rankWords()` but the Step 3 final merge-sort in `extractLearningItems` used raw `learningScore()`, undoing the effect. Fixed by applying the penalty in the Step 3 comparator too.
 
-**Pros:** Better long-term learning quality; handles large SRS decks gracefully; words on the edge of mastery stay visible.
-
-**Cons:** More complex scoring formula; harder to explain to user ("why does this known word appear?"); requires tuning the penalty weight.
-
-**Context:** The current `reviews >= 3` hard exclusion is intentional for MVP simplicity. This item reconsiders that choice once vocabulary size justifies it. Implementation would be: replace `filter(([w]) => !knownWords.has(w))` with a score multiplier based on mastery level.
-
-**Depends on:** getKnownWords() infrastructure — ✅ shipped in v0.2.0 (`useSRS.js:getKnownWords()`)
+**What was built:**
+- `nlp.js:rankWords()` — sorts with `× 0.08` for known words
+- `nlp.js` Step 3 sort — now also applies the penalty (the bug fix)
+- `nlp.js:countNew()` — fallback threshold counts only non-mastered words so mastered words don't block tier cascade
+- T-KNOWN-1, T-KNOWN-2 — passing tests verifying soft downrank semantics
