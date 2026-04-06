@@ -79,7 +79,11 @@ export function morphStems(w) {
 // ── Canonical (lemma) form ─────────────────────────────────────────────────────
 export function canonicalForm(word) {
   const w = word.toLowerCase()
-  const candidates = [w, ...morphStems(w)]
+
+  // If the word itself is in the vocab, it IS the canonical form — no stemming needed.
+  if (cefrMap[w] !== undefined || awlSet.has(w)) return w
+
+  const candidates = morphStems(w)
 
   let best = null
   for (const c of candidates) {
