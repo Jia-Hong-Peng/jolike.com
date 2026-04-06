@@ -31,11 +31,11 @@
       </div>
     </div>
 
-    <!-- List picker -->
-    <div class="px-4 pt-5 pb-3">
+    <!-- List picker (only shown when some lists have data) -->
+    <div v-if="visibleLists.length > 0" class="px-4 pt-5 pb-3">
       <div class="flex gap-2 flex-wrap">
         <button
-          v-for="list in VOCAB_LISTS"
+          v-for="list in visibleLists"
           :key="list.id"
           class="text-xs px-3 py-2 rounded-xl font-medium transition-colors min-h-[36px]"
           :class="selectedList === list.id
@@ -117,13 +117,20 @@ import { getVocabStats } from '@/services/api.js'
 import { VOCAB_LISTS } from '@/lib/vocabLists.js'
 import { lookupMeaning } from '@/lib/lookup.js'
 
-const loading      = ref(true)
-const error        = ref(null)
-const words        = ref([])
-const siteStats    = ref(null)
-const selectedList = ref('coca')
+const loading        = ref(true)
+const error          = ref(null)
+const words          = ref([])
+const siteStats      = ref(null)
+const availableLists = ref(null)   // null = not yet loaded; [] = no data
+const selectedList   = ref('coca')
 
 const currentListMeta = computed(() => VOCAB_LISTS.find(l => l.id === selectedList.value))
+
+const visibleLists = computed(() => {
+  if (!availableLists.value) return VOCAB_LISTS          // still loading, show all
+  if (availableLists.value.length === 0) return []       // no data at all, hide tabs
+  return VOCAB_LISTS.filter(l => availableLists.value.includes(l.id))
+})
 
 const maxCount = computed(() => words.value[0]?.video_count ?? 1)
 
@@ -143,9 +150,10 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    const { words: w, stats } = await getVocabStats(selectedList.value, 100)
+    const { words: w, stats, available_lists } = await getVocabStats(selectedList.value, 100)
     words.value = w
     if (stats) siteStats.value = stats
+    if (available_lists) availableLists.value = available_lists
   } catch {
     error.value = '載入失敗，請稍後再試'
   } finally {

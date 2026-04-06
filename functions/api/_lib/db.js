@@ -301,6 +301,19 @@ export async function getVideoStats(DB) {
 }
 
 /**
+ * Get list IDs that have at least one entry in video_vocab.
+ * Used to hide empty list tabs in the UI.
+ * @param {D1Database} DB
+ * @returns {Promise<string[]>}
+ */
+export async function getAvailableVocabLists(DB) {
+  const { results } = await DB
+    .prepare('SELECT DISTINCT list_id FROM video_vocab')
+    .all()
+  return (results ?? []).map(r => r.list_id)
+}
+
+/**
  * Get word frequency rankings across all indexed videos for a given vocab list.
  * Uses json_each to unpack the JSON words array stored in each row.
  * @param {D1Database} DB
