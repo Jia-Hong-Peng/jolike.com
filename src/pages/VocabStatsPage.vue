@@ -235,11 +235,19 @@
                     </p>
                     <div class="flex items-center justify-between gap-2">
                       <p class="text-gray-500 text-xs truncate flex-1">{{ ex.title }}</p>
-                      <!-- YouTube clip embed button -->
-                      <button
-                        class="flex-shrink-0 text-xs text-blue-400 hover:text-blue-300 underline min-h-[32px] px-2"
-                        @click="playClip(ex)"
-                      >▶ 播放片段</button>
+                      <div class="flex items-center gap-1 flex-shrink-0">
+                        <!-- Open in feed for full learning experience -->
+                        <a
+                          :href="`/feed/?v=${ex.video_id}`"
+                          class="text-xs text-gray-500 hover:text-gray-300 min-h-[32px] px-2 flex items-center"
+                          title="在學習模式中開啟"
+                        >📖 學習</a>
+                        <!-- YouTube clip embed button -->
+                        <button
+                          class="text-xs text-blue-400 hover:text-blue-300 underline min-h-[32px] px-2"
+                          @click="playClip(ex)"
+                        >▶ 播放片段</button>
+                      </div>
                     </div>
                     <!-- YouTube iframe (shown when clip is playing) -->
                     <div
@@ -261,7 +269,21 @@
               <!-- Empty examples -->
               <div v-else-if="!examplesLoading" class="mb-3">
                 <p class="text-xs text-gray-500 mb-1">真實例句</p>
-                <p class="text-gray-600 text-sm">暫無例句（此詞可能未出現在已索引的影片字幕中）</p>
+                <p class="text-gray-600 text-sm mb-2">暫無例句（此詞可能未出現在已索引的影片字幕中）</p>
+                <div class="flex gap-2">
+                  <a
+                    :href="`https://dictionary.cambridge.org/dictionary/english/${expandedWord}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-xs text-blue-400 hover:text-blue-300 underline min-h-[32px] flex items-center"
+                  >📖 劍橋辭典</a>
+                  <a
+                    :href="`https://www.youtube.com/results?search_query=${expandedWord}+meaning`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-xs text-gray-500 hover:text-gray-300 underline min-h-[32px] flex items-center"
+                  >▶ YouTube 搜尋</a>
+                </div>
               </div>
 
               <!-- Action buttons -->

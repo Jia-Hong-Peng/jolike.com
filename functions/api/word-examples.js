@@ -62,9 +62,12 @@ export async function onRequestGet(context) {
     )
     const transcriptResults = await DB.batch(transcriptQueries)
 
-    // Step 3: parse each transcript and find segments containing the word
+    // Step 3: parse each transcript and find segments containing the word.
+    // Match the canonical form AND common inflections, because the batch indexer
+    // stores canonical forms (e.g., "fee") but transcripts contain inflected
+    // forms (e.g., "fees", "achieving", "majored").
     const examples = []
-    const wordRe = new RegExp(`\\b${lw}\\b`, 'i')
+    const wordRe = buildWordRegex(lw)
 
     for (const result of transcriptResults) {
       if (examples.length >= limit) break
@@ -101,6 +104,27 @@ export async function onRequestGet(context) {
     console.error('word-examples error:', err)
     return json({ error: 'Server error' }, 500)
   }
+}
+
+/**
+ * Build a regex that matches a canonical word and its common inflected forms.
+ * The batch indexer stores canonical forms (via canonicalForm/morphStems) so
+ * "fees" → "fee", "achieving" → "achieve". This regex matches both.
+ */
+function buildWordRegex(word) {
+  const esc = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const alts = [esc, esc + 's']
+
+  if (word.length > 3 && word.endsWith('e')) {
+    // achieve → achieving, achieved, achiever
+    const stem = word.slice(0, -1).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    alts.push(stem + 'ing', stem + 'ed', stem + 'er')
+  } else if (word.length > 4) {
+    // major → majoring, majored, majorer
+    alts.push(esc + 'ing', esc + 'ed', esc + 'er', esc + 'es')
+  }
+
+  return new RegExp(`\\b(${alts.join('|')})\\b`, 'i')
 }
 
 function json(body, status = 200) {
