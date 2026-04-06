@@ -39,7 +39,7 @@ JavaScript (ES2022): Follow standard conventions
 - D1 只有 `videos` 表；`learning_cards` 不入 D1（前端記憶體）
 
 ### MPA 路由慣例
-- 兩個頁面：`/`（InputPage）和 `/feed/`（FeedPage）
+- 多頁面 MPA：`/`、`/feed/`、`/shadow/`、`/review/`、`/progress/`、`/library/`、`/vocab-study/`、`/vocab-stats/` 等
 - 頁面切換一律用 `window.location.href`，不引入 Vue Router
 - videoId 透過 URL query string `?v={id}` 傳遞
 

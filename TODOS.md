@@ -62,6 +62,26 @@ wrangler secret put PUSH_SEND_SECRET
 
 ---
 
+## ✅ DONE — VocabStats Leaderboard-as-Curriculum (v0.2.0)
+
+**What:** Complete rewrite of `/vocab-stats/` as an SRS-personalized vocabulary curriculum.
+
+**Status:** SHIPPED — PR #2. The leaderboard IS the curriculum; users learn without leaving the page.
+
+**What was built:**
+- SRS personalized sort: `learningValue = video_count × (1 - masteryFactor)`; mastered words sink to bottom
+- Inline expand panels per word: cedict definitions + YouTube clip embed (autoplay from exact timestamp)
+- 100-word milestone system with 🎓 badge + progress bar; stored in `localStorage`
+- Quick Bootstrap SRS: optional 20-word classification quiz pre-seeds localStorage before first sort
+- Learning path guide: NGSL → COCA → IELTS → Academic → C1 horizontal progress trail
+- Client-side search filter (no API round-trip)
+- Offset pagination for words 101-200
+- `GET /api/word-examples`: `json_each` exact match + D1 batch transcript search (max 10 videos)
+- `scripts/batch-vocab-index.mjs`: Node.js batch indexer bypassing Worker 10ms CPU limit
+- XSS fix: `highlightWord()` HTML-escapes external transcript text before `v-html` injection
+
+---
+
 ## P2 — Deferred from CEO Review (not prioritized yet)
 
 - **Anki CSV export** — skipped (SRS supersedes it)
@@ -76,14 +96,17 @@ wrangler secret put PUSH_SEND_SECRET
 
 **What:** Composable + component tests using `@vue/test-utils`.
 
-**Status:** SHIPPED — 71 tests total (5 test files), all passing.
+**Status:** SHIPPED — 127 tests total (8 test files), all passing.
 
 **Tests shipped:**
 - `tests/useLearningSession.test.js` (16 tests) — session marks, next/isComplete, jumpTo, localStorage persistence
-- `tests/useDictionary.test.js` (8 tests) — cache read/write, phrase skip, network failure
-- `tests/ActionBar.test.js` (9 tests) — render, touch targets, mark event emission
-- `tests/useSRS.test.js` (21 tests) — existing SRS algorithm tests
-- `tests/nlp.test.js` (17 tests) — existing NLP algorithm tests
+- `tests/useDictionary.test.js` (9 tests) — cache read/write, phrase skip, network failure
+- `tests/ActionBar.test.js` (10 tests) — render, touch targets, mark event emission (4-button layout)
+- `tests/useSRS.test.js` (25 tests) — SRS algorithm, streak, getKnownWords
+- `tests/nlp.test.js` (49 tests) — NLP algorithm, CEFR tier, lemma, fallback
+- `tests/HighlightedSentence.test.js` (8 tests) — sentence highlighting component
+- `tests/LearningCard.test.js` (6 tests) — card render and interaction
+- `tests/useShadowing.test.js` (4 tests) — shadowing mode composable
 
 **Note:** `analyze.js` oEmbed scenarios deferred (requires Miniflare environment).
 
@@ -101,4 +124,4 @@ wrangler secret put PUSH_SEND_SECRET
 
 **Context:** The current `reviews >= 3` hard exclusion is intentional for MVP simplicity. This item reconsiders that choice once vocabulary size justifies it. Implementation would be: replace `filter(([w]) => !knownWords.has(w))` with a score multiplier based on mastery level.
 
-**Depends on:** getKnownWords() infrastructure (being built in current PR)
+**Depends on:** getKnownWords() infrastructure — ✅ shipped in v0.2.0 (`useSRS.js:getKnownWords()`)

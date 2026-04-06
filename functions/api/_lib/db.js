@@ -326,9 +326,10 @@ export async function getAvailableVocabLists(DB) {
  * @param {D1Database} DB
  * @param {string} listId - e.g. 'coca', 'toeic', 'ngsl'
  * @param {number} limit
+ * @param {number} offset - for pagination (0 = top 100, 100 = 101-200, etc.)
  * @returns {Promise<Array<{word: string, video_count: number}>>}
  */
-export async function getVocabWordRankings(DB, listId, limit = 100) {
+export async function getVocabWordRankings(DB, listId, limit = 100, offset = 0) {
   const { results } = await DB
     .prepare(`
       SELECT je.value AS word, COUNT(DISTINCT vv.video_id) AS video_count
@@ -340,9 +341,9 @@ export async function getVocabWordRankings(DB, listId, limit = 100) {
         )
       GROUP BY je.value
       ORDER BY video_count DESC
-      LIMIT ?
+      LIMIT ? OFFSET ?
     `)
-    .bind(listId, limit)
+    .bind(listId, limit, offset)
     .all()
   return results ?? []
 }

@@ -17,6 +17,7 @@ export async function onRequestGet(context) {
   const url = new URL(request.url)
   const listId = url.searchParams.get('list') || 'coca'
   const limit  = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500)
+  const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10))
 
   if (!VALID_LISTS.has(listId)) {
     return new Response(JSON.stringify({ error: 'Invalid list ID' }), {
@@ -27,11 +28,11 @@ export async function onRequestGet(context) {
 
   try {
     const [words, stats, available_lists] = await Promise.all([
-      getVocabWordRankings(DB, listId, limit),
+      getVocabWordRankings(DB, listId, limit, offset),
       getVideoStats(DB),
       getAvailableVocabLists(DB),
     ])
-    return new Response(JSON.stringify({ list: listId, words, stats, available_lists }), {
+    return new Response(JSON.stringify({ list: listId, offset, words, stats, available_lists }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',

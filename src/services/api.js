@@ -205,10 +205,16 @@ export async function getChannelVideos(channelId, { limit = 200, offset = 0 } = 
  * @param {number} limit
  * @returns {Promise<Array<{word: string, video_count: number}>>}
  */
-export async function getVocabStats(listId, limit = 100) {
-  const res = await fetch(`${BASE}/api/vocab-stats?list=${encodeURIComponent(listId)}&limit=${limit}`)
+export async function getVocabStats(listId, limit = 100, offset = 0) {
+  const res = await fetch(`${BASE}/api/vocab-stats?list=${encodeURIComponent(listId)}&limit=${limit}&offset=${offset}`)
   const data = await res.json().catch(() => ({}))
   return { words: data.words ?? [], stats: data.stats ?? null, available_lists: data.available_lists ?? null }
+}
+
+export async function getWordExamples(word, listId = 'ngsl', limit = 3) {
+  const res = await fetch(`${BASE}/api/word-examples?word=${encodeURIComponent(word)}&list=${encodeURIComponent(listId)}&limit=${limit}`)
+  const data = await res.json().catch(() => ({}))
+  return data.examples ?? []
 }
 
 /**

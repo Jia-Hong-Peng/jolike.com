@@ -127,11 +127,11 @@ describe('markReview', () => {
     localStorage.setItem('jolike_srs_run', JSON.stringify(entry))
   })
 
-  it('T8 — known: multiplies interval by ~2.5 (ceil)', () => {
+  it('T8 — known: immediately marks as mastered (MAX_INTERVAL_DAYS=90)', () => {
     markReview('run', 'known')
     const entry = JSON.parse(localStorage.getItem('jolike_srs_run'))
-    expect(entry.interval).toBeGreaterThan(1)
-    expect(entry.interval).toBeLessThanOrEqual(3)  // ceil(1 * 2.5) = 3
+    // markReview('known') jumps directly to MAX_INTERVAL_DAYS=90, same as T9 cap test
+    expect(entry.interval).toBe(90)
     expect(entry.reviews).toBe(1)
   })
 
