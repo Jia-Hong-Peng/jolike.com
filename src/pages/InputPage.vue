@@ -218,6 +218,12 @@
         🎬 瀏覽影片庫
       </a>
       <a
+        href="/vocab-stats/"
+        class="text-gray-400 text-sm hover:text-white transition-colors font-medium"
+      >
+        📊 全站單字排行榜
+      </a>
+      <a
         href="/progress/"
         class="text-gray-600 text-sm hover:text-gray-400 transition-colors"
       >
