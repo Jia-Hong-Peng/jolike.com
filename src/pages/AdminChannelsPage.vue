@@ -104,25 +104,6 @@
           </button>
           <span v-else class="text-xs text-green-500 px-2 py-2">✓ 歷史影片已全部入庫</span>
 
-          <!-- Fetch transcripts via GitHub Actions (reliable — GitHub IPs not blocked by YouTube) -->
-          <button
-            v-if="stubCounts[ch.id] > 0"
-            class="text-xs px-3 py-2 rounded-xl font-medium transition-colors min-h-[36px]"
-            :class="channelBusy[ch.id] === 'github'
-              ? 'bg-blue-900 text-blue-400 cursor-not-allowed'
-              : 'bg-blue-900/60 text-blue-300 hover:bg-blue-900'"
-            :disabled="!!channelBusy[ch.id]"
-            @click="triggerFetch(ch)"
-          >
-            <span v-if="channelBusy[ch.id] === 'github'" class="animate-spin inline-block mr-1">⟳</span>
-            🤖 抓取字幕 ({{ stubCounts[ch.id] }} 部待處理)
-          </button>
-        </div>
-
-        <!-- GitHub Actions triggered — show link -->
-        <div v-if="githubRunUrl[ch.id]" class="mt-3 text-xs text-blue-400">
-          ✓ GitHub Actions 已啟動，在背景處理中
-          <a :href="githubRunUrl[ch.id]" target="_blank" class="underline ml-1">查看進度 →</a>
         </div>
 
         <!-- Result notice -->
@@ -135,7 +116,8 @@
     <!-- Cron hint -->
     <div class="mt-8 bg-gray-900/50 border border-gray-800 rounded-2xl px-4 py-3 text-xs text-gray-500">
       <p class="font-semibold text-gray-400 mb-1">⏰ 自動同步</p>
-      <p>GitHub Actions cron 每小時自動呼叫 RSS 同步，新影片會自動入庫。字幕需手動點「抓取字幕」或等使用者觸發。</p>
+      <p>GitHub Actions cron 每小時自動呼叫 RSS 同步，新影片會自動入庫。</p>
+      <p class="mt-1.5 text-gray-600">字幕須在本機（住宅 IP）執行批次腳本抓取：<br><code class="text-gray-500">python3 scripts/fetch-transcripts.py</code></p>
     </div>
   </div>
 </template>
@@ -144,7 +126,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import {
   getChannels, addChannel as apiAddChannel, deleteChannel as apiDeleteChannel,
-  syncChannel, importChannelVideosPage, getChannelVideos, triggerGithubFetch,
+  syncChannel, importChannelVideosPage,
 } from '@/services/api.js'
 
 const loading  = ref(true)
@@ -153,10 +135,8 @@ const addUrl   = ref('')
 const adding   = ref(false)
 const addError = ref('')
 
-const channelBusy   = reactive({})  // channelId → 'sync'|'import'|'github'|null
+const channelBusy   = reactive({})  // channelId → 'sync'|'import'|null
 const channelResult = reactive({})  // channelId → { ok, msg }
-const githubRunUrl  = reactive({})  // channelId → GitHub Actions runs URL
-const stubCounts    = reactive({})  // channelId → number of stubs without transcript
 
 onMounted(loadChannels)
 
@@ -164,20 +144,10 @@ async function loadChannels() {
   loading.value = true
   try {
     channels.value = await getChannels()
-    await Promise.all(channels.value.map(ch => loadStubCount(ch.id)))
   } catch {
     // ignore
   } finally {
     loading.value = false
-  }
-}
-
-async function loadStubCount(channelId) {
-  try {
-    const data = await getChannelVideos(channelId, { limit: 500 })
-    stubCounts[channelId] = (data.videos ?? []).filter(v => !v.hasTranscript).length
-  } catch {
-    stubCounts[channelId] = 0
   }
 }
 
@@ -257,7 +227,7 @@ async function importAll(channel) {
 
     channelResult[channel.id] = {
       ok: true,
-      msg: `✓ 掃描完成，共 ${totalImported} 部歷史影片已入庫，請點「抓取字幕」繼續`,
+      msg: `✓ 掃描完成，共 ${totalImported} 部歷史影片已入庫，請在本機執行 fetch-transcripts.py 抓取字幕`,
     }
     await loadChannels()
   } catch {
@@ -266,24 +236,6 @@ async function importAll(channel) {
       msg: totalImported > 0
         ? `已入庫 ${totalImported} 部，掃描中途失敗，可再試一次繼續`
         : '掃描失敗，請稍後再試',
-    }
-  } finally {
-    channelBusy[channel.id] = null
-  }
-}
-
-async function triggerFetch(channel) {
-  channelBusy[channel.id] = 'github'
-  channelResult[channel.id] = null
-  githubRunUrl[channel.id] = null
-  try {
-    const res = await triggerGithubFetch(channel.id)
-    githubRunUrl[channel.id] = res.runsUrl
-    channelResult[channel.id] = { ok: true, msg: '✓ GitHub Actions 已啟動，請點右上角連結追蹤進度' }
-  } catch (e) {
-    channelResult[channel.id] = {
-      ok: false,
-      msg: e?.message || '觸發失敗，請確認 GITHUB_TOKEN 已在 Cloudflare Pages 設定',
     }
   } finally {
     channelBusy[channel.id] = null
