@@ -273,6 +273,33 @@ export async function getChannelVideoIds(DB, channelId, { limit = 500, offset = 
 }
 
 /**
+ * Get word frequency rankings across all indexed videos for a given vocab list.
+ * Uses json_each to unpack the JSON words array stored in each row.
+ * @param {D1Database} DB
+ * @param {string} listId - e.g. 'coca', 'toeic', 'ngsl'
+ * @param {number} limit
+ * @returns {Promise<Array<{word: string, video_count: number}>>}
+ */
+export async function getVocabWordRankings(DB, listId, limit = 100) {
+  const { results } = await DB
+    .prepare(`
+      SELECT je.value AS word, COUNT(DISTINCT vv.video_id) AS video_count
+      FROM video_vocab vv, json_each(vv.words) je
+      WHERE vv.list_id = ?
+        AND EXISTS (
+          SELECT 1 FROM videos v
+          WHERE v.id = vv.video_id AND v.deleted_at IS NULL
+        )
+      GROUP BY je.value
+      ORDER BY video_count DESC
+      LIMIT ?
+    `)
+    .bind(listId, limit)
+    .all()
+  return results ?? []
+}
+
+/**
  * Get all videos that contain a specific word in a vocab list.
  * Loads all rows for the list then filters by word in application code.
  * @param {D1Database} DB

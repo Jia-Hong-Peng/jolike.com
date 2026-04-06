@@ -21,6 +21,7 @@ export default defineConfig({
         vocabStudy:    resolve(__dirname, 'vocab-study/index.html'),
         adminBackfill:    resolve(__dirname, 'admin-backfill/index.html'),
         adminChannels:    resolve(__dirname, 'admin-channels/index.html'),
+        vocabStats:       resolve(__dirname, 'vocab-stats/index.html'),
       },
     },
   },

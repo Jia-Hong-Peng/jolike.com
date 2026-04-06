@@ -215,6 +215,19 @@ export async function getChannelVideos(channelId, { limit = 200, offset = 0 } = 
 }
 
 /**
+ * GET /api/vocab-stats?list=X&limit=N
+ * Return word frequency rankings for a vocabulary list.
+ * @param {string} listId
+ * @param {number} limit
+ * @returns {Promise<Array<{word: string, video_count: number}>>}
+ */
+export async function getVocabStats(listId, limit = 100) {
+  const res = await fetch(`${BASE}/api/vocab-stats?list=${encodeURIComponent(listId)}&limit=${limit}`)
+  const data = await res.json().catch(() => ({}))
+  return data.words ?? []
+}
+
+/**
  * Map API error codes to user-facing messages.
  * @param {string} errorCode
  * @returns {string}
