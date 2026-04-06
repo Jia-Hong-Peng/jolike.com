@@ -156,7 +156,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { getVocabStats } from '@/services/api.js'
 import { VOCAB_LISTS, getSrsStatus } from '@/lib/vocabLists.js'
 import { lookupMeaning } from '@/lib/lookup.js'
@@ -186,6 +186,28 @@ const LIST_DIFFICULTY = {
   opal:     'advanced',
 }
 
+// ── Session state persistence ────────────────────────────────────────────────
+
+const STATE_KEY = 'jolike_vocab_stats_state'
+
+function saveState() {
+  try {
+    sessionStorage.setItem(STATE_KEY, JSON.stringify({
+      difficulty: selectedDifficulty.value,
+      list: selectedList.value,
+      scrollY: window.scrollY,
+    }))
+  } catch {}
+}
+
+function loadSavedState() {
+  try {
+    const raw = sessionStorage.getItem(STATE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return null
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 
 const loading        = ref(true)
@@ -193,13 +215,14 @@ const error          = ref(null)
 const words          = ref([])
 const siteStats      = ref(null)
 const availableLists = ref(null)   // null = not yet loaded; [] = no data
-const selectedList   = ref('ngsl')
 
-// Read user's level from localStorage (same key used by homepage)
+// Restore from session if returning from word view, else default by user level
+const _saved = loadSavedState()
 const userLevel = (() => {
   try { return localStorage.getItem('jolike_level') || 'intermediate' } catch { return 'intermediate' }
 })()
-const selectedDifficulty = ref(userLevel)
+const selectedList       = ref(_saved?.list       || 'ngsl')
+const selectedDifficulty = ref(_saved?.difficulty || userLevel)
 
 // ── Computed ─────────────────────────────────────────────────────────────────
 
@@ -285,6 +308,12 @@ async function load() {
     error.value = '載入失敗，請稍後再試'
   } finally {
     loading.value = false
+    // Restore scroll position if returning from word view
+    if (_saved?.scrollY) {
+      await nextTick()
+      window.scrollTo({ top: _saved.scrollY, behavior: 'instant' })
+      sessionStorage.removeItem(STATE_KEY)
+    }
   }
 }
 
@@ -309,6 +338,7 @@ function selectList(id) {
 }
 
 function openWord(word) {
+  saveState()
   window.location.href = `/vocab-study/?list=${selectedList.value}&word=${encodeURIComponent(word)}&from=/vocab-stats/`
 }
 
