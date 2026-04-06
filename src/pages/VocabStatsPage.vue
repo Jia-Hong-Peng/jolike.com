@@ -407,11 +407,17 @@ function syncSrsStatuses() {
 }
 
 function personalize(rawWords) {
-  return rawWords.map((item, originalIdx) => ({
-    ...item,
-    rank: originalIdx + 1 + (currentPage.value - 1) * 100,
-    learningValue: item.video_count * (1 - masteryFactor(item.word)),
-  })).sort((a, b) => b.learningValue - a.learningValue)
+  const pageOffset = (currentPage.value - 1) * 100
+  return rawWords
+    .map(item => ({
+      ...item,
+      learningValue: item.video_count * (1 - masteryFactor(item.word)),
+    }))
+    .sort((a, b) => b.learningValue - a.learningValue)
+    .map((item, sortedIdx) => ({
+      ...item,
+      rank: sortedIdx + 1 + pageOffset,
+    }))
 }
 
 function masteryFactor(word) {
