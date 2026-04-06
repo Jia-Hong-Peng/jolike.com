@@ -94,9 +94,23 @@
 
     <!-- Leaderboard -->
     <div v-else class="px-4 pt-2">
-      <p class="text-gray-600 text-xs mb-3">
-        「出現在幾部影片裡」排行 · {{ currentListMeta?.label }} · Top {{ words.length }}
-      </p>
+      <div class="mb-3">
+        <p class="text-gray-600 text-xs mb-2">
+          「出現在幾部影片裡」排行 · {{ currentListMeta?.label }} · Top {{ words.length }}
+        </p>
+        <!-- Mastery progress -->
+        <div class="flex items-center gap-2">
+          <div class="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-green-600 rounded-full transition-all duration-500"
+              :style="{ width: masteryPercent + '%' }"
+            ></div>
+          </div>
+          <span class="text-xs text-green-500 flex-shrink-0 font-medium">
+            ✓ {{ masteredCount }} / {{ words.length }}
+          </span>
+        </div>
+      </div>
 
       <div class="space-y-1.5">
         <div
@@ -254,6 +268,13 @@ const visibleDifficultyLevels = computed(() => {
 })
 
 const maxCount = computed(() => words.value[0]?.video_count ?? 1)
+
+const masteredCount = computed(() =>
+  words.value.filter(item => getSrsStatus(item.word) === 'mastered').length
+)
+const masteryPercent = computed(() =>
+  words.value.length ? Math.round((masteredCount.value / words.value.length) * 100) : 0
+)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
