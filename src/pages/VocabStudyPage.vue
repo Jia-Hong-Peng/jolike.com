@@ -219,7 +219,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import ActionBar from '@/components/ActionBar.vue'
 import { VOCAB_LISTS, getListMeta, loadWordList, generateVocabCards } from '@/lib/vocabLists.js'
 import { useLearningSession } from '@/composables/useLearningSession.js'
-import { scheduleReview, markReview, getDue } from '@/composables/useSRS.js'
+import { scheduleReview, markKnown, markUnsure, getDue } from '@/composables/useSRS.js'
 import { lookupDefinition } from '@/composables/useDictionary.js'
 import { useTTS } from '@/composables/useTTS.js'
 import { getVocabVideos } from '@/services/api.js'
@@ -407,13 +407,13 @@ function animateCardOut(callback) {
   setTimeout(() => { translateY.value = 0; callback() }, 300)
 }
 
-// Push SRS forward: first encounter → scheduleReview; revisit → markReview
+// known → instantly mastered; unsure → reset to learning
 function advanceSrs(card, outcome) {
   if (!card) return
-  if (card._srsStatus === 'new') {
-    scheduleReview(card)
+  if (outcome === 'known') {
+    markKnown(card)
   } else {
-    markReview(card.keyword, outcome)
+    markUnsure(card)
   }
 }
 

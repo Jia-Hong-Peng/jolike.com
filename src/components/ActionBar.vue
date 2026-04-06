@@ -2,7 +2,7 @@
   <div class="flex gap-2 mt-3">
     <!-- Prev -->
     <button
-      class="flex-none flex items-center justify-center rounded-2xl px-5 min-h-[44px] font-semibold
+      class="flex-none flex items-center justify-center rounded-2xl px-4 min-h-[44px] font-semibold
              text-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700
              disabled:opacity-30 disabled:cursor-not-allowed"
       :disabled="!canGoPrev"
@@ -10,6 +10,19 @@
       @click="$emit('prev')"
     >
       ◀
+    </button>
+
+    <!-- Unsure -->
+    <button
+      class="flex-1 flex items-center justify-center gap-1 rounded-2xl font-semibold
+             text-base transition-colors min-h-[44px]"
+      :class="status === 'unsure'
+        ? 'bg-orange-600 text-white'
+        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+      @click="$emit('mark', { id: cardId, status: 'unsure' })"
+    >
+      <span>👎</span>
+      <span>我不熟</span>
     </button>
 
     <!-- Known -->
@@ -27,7 +40,7 @@
 
     <!-- Next -->
     <button
-      class="flex-none flex items-center justify-center rounded-2xl px-5 min-h-[44px] font-semibold
+      class="flex-none flex items-center justify-center rounded-2xl px-4 min-h-[44px] font-semibold
              text-lg transition-colors bg-gray-800 text-gray-300 hover:bg-gray-700"
       title="下一則"
       @click="$emit('next')"
@@ -40,7 +53,7 @@
 <script setup>
 defineProps({
   cardId:    { type: String,  required: true },
-  status:    { type: String,  default: null },   // 'known'|null
+  status:    { type: String,  default: null },   // 'known'|'unsure'|null
   canGoPrev: { type: Boolean, default: false },
 })
 

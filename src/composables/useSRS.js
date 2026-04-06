@@ -138,6 +138,62 @@ function recordStreakToday() {
 }
 
 /**
+ * Immediately mark a word as mastered (我會了).
+ * Sets interval to MAX so getSrsStatus() returns 'mastered' right away.
+ * Creates entry if it doesn't exist yet.
+ * @param {Object} card — full learning card object
+ */
+export function markKnown(card) {
+  const key = wordKey(card.keyword)
+  const existing = readEntry(key)
+  writeEntry(key, {
+    word: card.keyword,
+    meaning_zh: card.meaning_zh ?? '',
+    videoId: card.video_id ?? '',
+    type: card.type ?? 'word',
+    difficulty_tier: card.difficulty_tier ?? 4,
+    sentence: card.sentence ?? '',
+    clip_start: card.clip_start ?? 0,
+    clip_end: card.clip_end ?? 0,
+    interval: MAX_INTERVAL_DAYS,
+    nextReview: Date.now() + MAX_INTERVAL_DAYS * MS_PER_DAY,
+    reviews: (existing?.reviews ?? 0) + 1,
+    ...(card.lemma ? { lemma: card.lemma } : {}),
+    categories: card.categories ?? existing?.categories ?? [],
+  })
+  recordStreakToday()
+}
+
+/**
+ * Mark a word as unfamiliar — reset interval to 1 (back to learning).
+ * Creates entry if it doesn't exist yet.
+ * @param {Object} card
+ */
+export function markUnsure(card) {
+  const key = wordKey(card.keyword)
+  const existing = readEntry(key)
+  const base = existing ?? {
+    word: card.keyword,
+    meaning_zh: card.meaning_zh ?? '',
+    videoId: card.video_id ?? '',
+    type: card.type ?? 'word',
+    difficulty_tier: card.difficulty_tier ?? 4,
+    sentence: card.sentence ?? '',
+    clip_start: card.clip_start ?? 0,
+    clip_end: card.clip_end ?? 0,
+    categories: card.categories ?? [],
+    ...(card.lemma ? { lemma: card.lemma } : {}),
+  }
+  writeEntry(key, {
+    ...base,
+    interval: 1,
+    nextReview: Date.now() + MS_PER_DAY,
+    reviews: (existing?.reviews ?? 0) + 1,
+  })
+  recordStreakToday()
+}
+
+/**
  * Record the outcome of a review and schedule the next one.
  * @param {string} keyword
  * @param {'known'|'unsure'} outcome
@@ -150,14 +206,10 @@ export function markReview(keyword, outcome) {
   const reviews = (entry.reviews ?? 0) + 1
 
   if (outcome === 'known') {
-    const nextInterval = Math.min(
-      Math.ceil(entry.interval * 2.5),
-      MAX_INTERVAL_DAYS,
-    )
     writeEntry(key, {
       ...entry,
-      interval: nextInterval,
-      nextReview: Date.now() + nextInterval * MS_PER_DAY,
+      interval: MAX_INTERVAL_DAYS,
+      nextReview: Date.now() + MAX_INTERVAL_DAYS * MS_PER_DAY,
       reviews,
     })
   } else {
