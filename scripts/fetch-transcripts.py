@@ -134,9 +134,9 @@ def fetch_via_ytdlp(video_id):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         url = f'https://www.youtube.com/watch?v={video_id}'
-        has_cookies = bool(COOKIES_PATH and os.path.isfile(COOKIES_PATH))
-        # android/ios clients don't support cookies; use web when cookies present
-        player_client = 'web' if has_cookies else 'android,ios,web'
+        # android/ios work from residential IPs; web needs PO Token from datacenter IPs
+        # Cookies only help with web client, but web still fails from datacenter due to PO Token
+        # Keep android,ios,web for best residential IP coverage; skip cookies (not effective)
         cmd = [
             'yt-dlp',
             '--skip-download',
@@ -146,32 +146,15 @@ def fetch_via_ytdlp(video_id):
             '--sub-format', 'json3',
             '--output', f'{tmpdir}/%(id)s',
             '--no-playlist',
-            '--extractor-args', f'youtube:player_client={player_client}',
+            '--extractor-args', 'youtube:player_client=android,ios,web',
         ]
-        if has_cookies:
-            cmd.extend(['--cookies', COOKIES_PATH])
         cmd.append(url)
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-            # Log ALL yt-dlp output for diagnostics (returncode + stderr + stdout snippet)
-            sys.stdout.write(f'[rc={result.returncode}] ')
-            for line in (result.stderr or '').strip().split('\n'):
-                if line.strip():
-                    sys.stdout.write(f'[err: {line.strip()[:80]}] ')
-            for line in (result.stdout or '').strip().split('\n')[:3]:
-                if line.strip():
-                    sys.stdout.write(f'[out: {line.strip()[:60]}] ')
-            sys.stdout.flush()
         except subprocess.TimeoutExpired:
             return None, 'ytdlp_timeout'
         except Exception as e:
             return None, f'ytdlp_err: {str(e)[:40]}'
-
-        # List all files in tmpdir for diagnostics
-        all_tmpdir = glob.glob(f'{tmpdir}/*')
-        if all_tmpdir:
-            sys.stdout.write(f'[files: {[os.path.basename(f) for f in all_tmpdir]}] ')
-            sys.stdout.flush()
 
         # Find any generated subtitle file
         sub_files = glob.glob(f'{tmpdir}/{video_id}*.json3')
