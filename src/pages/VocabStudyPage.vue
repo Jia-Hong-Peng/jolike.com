@@ -226,7 +226,9 @@ import { getVocabVideos } from '@/services/api.js'
 import { lookupIpa } from '@/lib/pronunciation.js'
 
 // ── URL param ─────────────────────────────────────────────────────────────────
-const listId = new URLSearchParams(window.location.search).get('list') || ''
+const _params = new URLSearchParams(window.location.search)
+const listId  = _params.get('list') || ''
+const startWord = _params.get('word') || ''
 const currentList = computed(() => listId ? getListMeta(listId) : null)
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -239,6 +241,7 @@ const {
   markCard,
   next,
   prev,
+  jumpTo,
   isComplete,
   cardStatus,
 } = useLearningSession(listId ? `vocab_${listId}` : '', cards)
@@ -255,6 +258,13 @@ onMounted(async () => {
   try {
     const words = await loadWordList(listId)
     cards.value = generateVocabCards(words, listId)
+    // Jump to specific word if passed via ?word= param
+    if (startWord) {
+      const idx = cards.value.findIndex(
+        c => c.keyword.toLowerCase() === startWord.toLowerCase()
+      )
+      if (idx > 0) jumpTo(idx)
+    }
   } finally {
     loading.value = false
   }
