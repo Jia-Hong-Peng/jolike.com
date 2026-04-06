@@ -176,7 +176,15 @@
 
           <!-- Related videos from vocab index -->
           <div v-if="relatedVideos.length > 0" class="mt-4 pt-3 border-t border-gray-800">
-            <p class="text-gray-500 text-xs mb-2">📹 出現在這些影片中</p>
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-gray-500 text-xs">📹 出現在這些影片中</p>
+              <button
+                class="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 min-h-[32px] px-2"
+                @click="startPlaylist"
+              >
+                ▶ 播放全部片段
+              </button>
+            </div>
             <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
               <a
                 v-for="v in relatedVideos"
@@ -220,6 +228,91 @@
         </div>
       </div>
     </div>
+
+    <!-- ── Clip Playlist Overlay ──────────────────────────────────────────────── -->
+    <Teleport to="body">
+      <div
+        v-if="showPlaylist"
+        class="fixed inset-0 z-[200] bg-black flex flex-col"
+      >
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-800 flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <button
+              class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-800 text-gray-300"
+              @click="closePlaylist"
+            >✕</button>
+            <div>
+              <p class="text-white text-sm font-semibold">{{ currentCard?.keyword }} 片段大集合</p>
+              <p class="text-gray-500 text-xs">
+                <template v-if="playlistLoading">載入中…</template>
+                <template v-else>{{ playlistIdx + 1 }} / {{ playlistClips.length }} 個片段</template>
+              </p>
+            </div>
+          </div>
+          <!-- Prev / Next -->
+          <div class="flex gap-2">
+            <button
+              class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-800 text-gray-300 disabled:opacity-30"
+              :disabled="playlistIdx === 0"
+              @click="playlistPrev"
+            >◀</button>
+            <button
+              class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-800 text-gray-300 disabled:opacity-30"
+              :disabled="playlistIdx >= playlistClips.length - 1"
+              @click="playlistNext"
+            >▶</button>
+          </div>
+        </div>
+
+        <!-- Loading -->
+        <div v-if="playlistLoading" class="flex-1 flex items-center justify-center">
+          <div class="text-center space-y-3">
+            <div class="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+            <p class="text-gray-400 text-sm">正在分析影片片段…</p>
+          </div>
+        </div>
+
+        <!-- No clips found -->
+        <div v-else-if="playlistClips.length === 0" class="flex-1 flex items-center justify-center px-8 text-center">
+          <div class="space-y-2">
+            <p class="text-4xl">🔍</p>
+            <p class="text-white text-base font-semibold">找不到包含此單字的片段</p>
+            <p class="text-gray-500 text-sm">影片字幕可能未包含「{{ currentCard?.keyword }}」</p>
+          </div>
+        </div>
+
+        <!-- YouTube player -->
+        <div v-else-if="currentClip" class="flex-1 flex flex-col">
+          <div class="relative w-full" style="padding-top: 56.25%">
+            <iframe
+              :key="`${currentClip.id}-${playlistIdx}`"
+              :src="`https://www.youtube.com/embed/${currentClip.id}?autoplay=1&start=${Math.floor(currentClip.clip_start)}&end=${Math.ceil(currentClip.clip_end)}&rel=0&modestbranding=1`"
+              class="absolute inset-0 w-full h-full"
+              allow="autoplay; encrypted-media"
+              allowfullscreen
+            ></iframe>
+          </div>
+          <!-- Clip info -->
+          <div class="px-4 py-3 flex-1">
+            <p class="text-white text-sm font-semibold line-clamp-2">{{ currentClip.title }}</p>
+            <p class="text-gray-500 text-xs mt-1">
+              片段 {{ Math.floor(currentClip.clip_start) }}s – {{ Math.ceil(currentClip.clip_end) }}s
+            </p>
+            <!-- Dot indicators -->
+            <div class="flex gap-1.5 mt-3">
+              <button
+                v-for="(_, i) in playlistClips"
+                :key="i"
+                class="w-2 h-2 rounded-full transition-colors"
+                :class="i === playlistIdx ? 'bg-blue-500' : 'bg-gray-700'"
+                @click="scheduleClip(i)"
+              ></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -231,7 +324,7 @@ import { useLearningSession } from '@/composables/useLearningSession.js'
 import { scheduleReview, markKnown, markUnsure, getDue } from '@/composables/useSRS.js'
 import { lookupDefinition } from '@/composables/useDictionary.js'
 import { useTTS } from '@/composables/useTTS.js'
-import { getVocabVideos } from '@/services/api.js'
+import { getVocabVideos, getVideo } from '@/services/api.js'
 import { lookupIpa } from '@/lib/pronunciation.js'
 
 // ── URL param ─────────────────────────────────────────────────────────────────
@@ -317,6 +410,76 @@ async function loadRelatedVideos() {
   } catch {
     relatedVideos.value = []
   }
+}
+
+// ── Clip playlist ─────────────────────────────────────────────────────────────
+const showPlaylist    = ref(false)
+const playlistLoading = ref(false)
+const playlistClips   = ref([])   // [{ id, title, clip_start, clip_end }]
+const playlistIdx     = ref(0)
+let   playlistTimer   = null
+
+const currentClip = computed(() => playlistClips.value[playlistIdx.value] ?? null)
+
+async function startPlaylist() {
+  if (!currentCard.value || relatedVideos.value.length === 0) return
+  showPlaylist.value = true
+  playlistLoading.value = true
+  playlistClips.value = []
+  playlistIdx.value = 0
+  clearTimeout(playlistTimer)
+
+  const kw = (currentCard.value.keyword ?? '').toLowerCase()
+  const lm = (currentCard.value.lemma  ?? kw).toLowerCase()
+  const matchesFw = c =>
+    (c.keyword ?? '').toLowerCase() === kw ||
+    (c.lemma   ?? '').toLowerCase() === kw ||
+    (c.keyword ?? '').toLowerCase() === lm ||
+    (c.lemma   ?? '').toLowerCase() === lm
+
+  const { extractLearningItems } = await import('@/lib/nlp.js')
+  const clips = []
+
+  for (const v of relatedVideos.value) {
+    try {
+      const data = await getVideo(v.id)
+      // Try intermediate first (tier 3-4), then beginner (tier 1-2)
+      for (const lvl of ['intermediate', 'beginner']) {
+        const items = extractLearningItems(data.transcript, v.id, lvl, new Set())
+        const found = items.find(matchesFw)
+        if (found) {
+          clips.push({ id: v.id, title: v.title || v.id, clip_start: found.clip_start, clip_end: found.clip_end })
+          break
+        }
+      }
+    } catch { /* skip failed video */ }
+  }
+
+  playlistClips.value = clips
+  playlistLoading.value = false
+  if (clips.length > 0) scheduleClip(0)
+}
+
+function scheduleClip(idx) {
+  clearTimeout(playlistTimer)
+  if (idx >= playlistClips.value.length) return
+  playlistIdx.value = idx
+  const clip = playlistClips.value[idx]
+  const duration = Math.max(3000, (clip.clip_end - clip.clip_start + 1.5) * 1000)
+  playlistTimer = setTimeout(() => scheduleClip(idx + 1), duration)
+}
+
+function closePlaylist() {
+  clearTimeout(playlistTimer)
+  showPlaylist.value = false
+  playlistClips.value = []
+}
+
+function playlistPrev() {
+  if (playlistIdx.value > 0) scheduleClip(playlistIdx.value - 1)
+}
+function playlistNext() {
+  if (playlistIdx.value < playlistClips.value.length - 1) scheduleClip(playlistIdx.value + 1)
 }
 
 // ── Dictionary lookup ─────────────────────────────────────────────────────────
