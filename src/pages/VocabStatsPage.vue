@@ -31,11 +31,30 @@
       </div>
     </div>
 
+    <!-- Difficulty filter -->
+    <div class="px-4 pt-5 pb-1">
+      <p class="text-gray-600 text-xs mb-2">程度篩選</p>
+      <div class="flex gap-2">
+        <button
+          v-for="lv in DIFFICULTY_LEVELS"
+          :key="lv.key"
+          class="text-sm px-4 py-2 rounded-xl font-medium transition-colors min-h-[40px] flex-1"
+          :class="selectedDifficulty === lv.key
+            ? lv.activeClass
+            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
+          @click="selectDifficulty(lv.key)"
+        >
+          {{ lv.label }}
+        </button>
+      </div>
+    </div>
+
     <!-- List picker (only shown when some lists have data) -->
-    <div v-if="visibleLists.length > 0" class="px-4 pt-5 pb-3">
+    <div v-if="levelFilteredLists.length > 0" class="px-4 pt-3 pb-3">
+      <p class="text-gray-600 text-xs mb-2">詞彙表</p>
       <div class="flex gap-2 flex-wrap">
         <button
-          v-for="list in visibleLists"
+          v-for="list in levelFilteredLists"
           :key="list.id"
           class="text-xs px-3 py-2 rounded-xl font-medium transition-colors min-h-[36px]"
           :class="selectedList === list.id
@@ -59,8 +78,15 @@
       <button class="bg-gray-700 text-white px-6 py-3 rounded-2xl min-h-[44px]" @click="load">重試</button>
     </div>
 
-    <!-- Empty -->
-    <div v-else-if="words.length === 0" class="flex flex-col items-center py-24 gap-3 px-8 text-center">
+    <!-- Empty (no lists for this difficulty have data yet) -->
+    <div v-else-if="levelFilteredLists.length === 0" class="flex flex-col items-center py-24 gap-3 px-8 text-center">
+      <p class="text-4xl">📊</p>
+      <p class="text-white text-base font-semibold">此程度還沒有統計資料</p>
+      <p class="text-gray-500 text-sm">影片入庫並掃描詞彙索引後，這裡會顯示排行</p>
+    </div>
+
+    <!-- Empty words -->
+    <div v-else-if="words.length === 0 && !loading" class="flex flex-col items-center py-24 gap-3 px-8 text-center">
       <p class="text-4xl">📊</p>
       <p class="text-white text-base font-semibold">還沒有統計資料</p>
       <p class="text-gray-500 text-sm">影片入庫並掃描詞彙索引後，這裡會顯示排行</p>
@@ -117,22 +143,67 @@ import { getVocabStats } from '@/services/api.js'
 import { VOCAB_LISTS } from '@/lib/vocabLists.js'
 import { lookupMeaning } from '@/lib/lookup.js'
 
+// ── Difficulty config ────────────────────────────────────────────────────────
+
+const DIFFICULTY_LEVELS = [
+  { key: 'all',          label: '全部',   activeClass: 'bg-gray-600 text-white' },
+  { key: 'beginner',     label: '初階',   activeClass: 'bg-lime-700 text-white' },
+  { key: 'intermediate', label: '中階',   activeClass: 'bg-blue-600 text-white' },
+  { key: 'advanced',     label: '進階',   activeClass: 'bg-purple-600 text-white' },
+]
+
+// Mapping: list ID → difficulty key
+const LIST_DIFFICULTY = {
+  cefr_a:   'beginner',
+  ngsl:     'intermediate',
+  cefr_b1:  'intermediate',
+  toeic:    'intermediate',
+  bsl:      'intermediate',
+  ielts:    'intermediate',
+  coca:     'intermediate',
+  cefr_c1:  'advanced',
+  toefl:    'advanced',
+  academic: 'advanced',
+  advanced: 'advanced',
+  opal:     'advanced',
+}
+
+// ── State ────────────────────────────────────────────────────────────────────
+
 const loading        = ref(true)
 const error          = ref(null)
 const words          = ref([])
 const siteStats      = ref(null)
 const availableLists = ref(null)   // null = not yet loaded; [] = no data
-const selectedList   = ref('coca')
+const selectedList   = ref('ngsl')
+
+// Read user's level from localStorage (same key used by homepage)
+const userLevel = (() => {
+  try { return localStorage.getItem('jolike_level') || 'intermediate' } catch { return 'intermediate' }
+})()
+const selectedDifficulty = ref(userLevel)
+
+// ── Computed ─────────────────────────────────────────────────────────────────
 
 const currentListMeta = computed(() => VOCAB_LISTS.find(l => l.id === selectedList.value))
 
+// Lists that have data in video_vocab
 const visibleLists = computed(() => {
-  if (!availableLists.value) return VOCAB_LISTS          // still loading, show all
-  if (availableLists.value.length === 0) return []       // no data at all, hide tabs
+  if (!availableLists.value) return VOCAB_LISTS
+  if (availableLists.value.length === 0) return []
   return VOCAB_LISTS.filter(l => availableLists.value.includes(l.id))
 })
 
+// Lists filtered by selected difficulty AND having data
+const levelFilteredLists = computed(() => {
+  const base = visibleLists.value
+  if (selectedDifficulty.value === 'all') return base
+  return base.filter(l => LIST_DIFFICULTY[l.id] === selectedDifficulty.value)
+})
+
 const maxCount = computed(() => words.value[0]?.video_count ?? 1)
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function barWidth(count) {
   return Math.round((count / maxCount.value) * 100)
@@ -146,6 +217,16 @@ function barColor(idx) {
   return 'bg-gray-700'
 }
 
+// Pick the best default list for a given difficulty + available lists
+function bestListForDifficulty(difficulty, available) {
+  const candidates = VOCAB_LISTS
+    .filter(l => available.includes(l.id))
+    .filter(l => difficulty === 'all' || LIST_DIFFICULTY[l.id] === difficulty)
+  return candidates[0]?.id ?? available[0]
+}
+
+// ── Data loading ─────────────────────────────────────────────────────────────
+
 async function load() {
   loading.value = true
   error.value = null
@@ -154,12 +235,20 @@ async function load() {
     if (stats) siteStats.value = stats
     if (available_lists) {
       availableLists.value = available_lists
-      // 若目前選的 list 沒有資料，自動切換到第一個有資料的 list
-      if (available_lists.length > 0 && !available_lists.includes(selectedList.value)) {
-        selectedList.value = available_lists[0]
-        const retry = await getVocabStats(selectedList.value, 100)
-        words.value = retry.words
-        return
+
+      // If current selection has no data or doesn't fit current difficulty, auto-switch
+      const inDifficulty = selectedDifficulty.value === 'all'
+        || LIST_DIFFICULTY[selectedList.value] === selectedDifficulty.value
+      const hasData = available_lists.includes(selectedList.value)
+
+      if (!hasData || !inDifficulty) {
+        const best = bestListForDifficulty(selectedDifficulty.value, available_lists)
+        if (best && best !== selectedList.value) {
+          selectedList.value = best
+          const retry = await getVocabStats(best, 100)
+          words.value = retry.words ?? []
+          return
+        }
       }
     }
     words.value = w
@@ -168,6 +257,21 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+function selectDifficulty(key) {
+  selectedDifficulty.value = key
+  // Switch to first available list in this difficulty
+  if (availableLists.value) {
+    const best = bestListForDifficulty(key, availableLists.value)
+    if (best) {
+      selectedList.value = best
+      load()
+      return
+    }
+  }
+  // No lists available for this difficulty — just update UI, no API call
+  words.value = []
 }
 
 function selectList(id) {
