@@ -174,6 +174,10 @@ def fetch_via_ytdlp(video_id):
         except Exception as e:
             return None, f'ytdlp_err: {str(e)[:40]}'
 
+        # Detect rate-limiting before checking files
+        if '429' in result.stderr or 'Too Many Requests' in result.stderr:
+            return None, 'rate_limited'
+
         # Find any generated subtitle file
         sub_files = glob.glob(f'{tmpdir}/{video_id}*.json3')
         if not sub_files:
@@ -275,6 +279,10 @@ def fetch_transcript(video_id):
     if segments:
         return segments, None
 
+    # If yt-dlp hit a rate limit, transcript API will also be blocked — don't waste the call
+    if err == 'rate_limited':
+        return None, 'rate_limited'
+
     # Fall back to youtube-transcript-api
     segments2, err2 = fetch_via_transcript_api(video_id)
     if segments2:
@@ -307,6 +315,7 @@ def main():
         success = 0
         no_captions = 0
         errors = 0
+        rate_limited = False
 
         for i, v in enumerate(stubs, 1):
             vid = v['id']
@@ -319,7 +328,10 @@ def main():
             if segments is None:
                 sys.stdout.write(f"{err}\n")
                 sys.stdout.flush()
-                if err and err.startswith('error:'):
+                if err == 'rate_limited':
+                    print(f"\n🚫 YouTube rate limit hit — aborting. Wait a few hours then re-run.")
+                    sys.exit(1)
+                elif err and err.startswith('error:'):
                     errors += 1
                 else:
                     no_captions += 1
