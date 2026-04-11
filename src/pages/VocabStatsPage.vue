@@ -308,13 +308,6 @@
         </template>
       </div>
 
-      <!-- Load next page button (when not yet milestone reached) -->
-      <div v-if="milestoneReached && !isLastPage" class="mt-6 text-center">
-        <button
-          class="bg-blue-600 text-white px-8 py-3 rounded-2xl font-semibold min-h-[44px]"
-          @click="loadNextPage"
-        >繼續挑戰 {{ currentPage * 100 + 1 }}–{{ (currentPage + 1) * 100 }} →</button>
-      </div>
     </div>
   </div>
 </template>
@@ -347,7 +340,6 @@ const levelFilteredLists = computed(() => {
 const loading         = ref(true)
 const error           = ref(null)
 const words           = ref([])            // raw from API, sorted by video_count DESC
-const siteStats       = ref(null)
 const availableLists  = ref(null)
 const selectedList    = ref('ngsl')
 const currentPage     = ref(1)             // 1 = top 100, 2 = 101-200, etc.
@@ -358,6 +350,8 @@ const expandedWord    = ref(null)
 const examples        = ref([])
 const examplesLoading = ref(false)
 const playingClip     = ref(null)          // { video_id, start }
+const examplesCache   = new Map()          // word → examples[], cleared on list change
+let   expandGen       = 0                  // generation counter to drop stale fetches
 
 // Search
 const searchQuery     = ref('')
@@ -460,14 +454,27 @@ async function toggleExpand(word) {
   }
   expandedWord.value = word
   playingClip.value = null
+
+  // Serve from cache if available (cleared when list changes)
+  if (examplesCache.has(word)) {
+    examples.value = examplesCache.get(word)
+    examplesLoading.value = false
+    return
+  }
+
   examples.value = []
   examplesLoading.value = true
+  const gen = ++expandGen   // capture generation; stale fetches are silently dropped
   try {
-    examples.value = await getWordExamples(word, selectedList.value, 3)
+    const result = await getWordExamples(word, selectedList.value, 3)
+    if (gen === expandGen) {
+      examples.value = result
+      examplesCache.set(word, result)
+    }
   } catch {
-    examples.value = []
+    if (gen === expandGen) examples.value = []
   } finally {
-    examplesLoading.value = false
+    if (gen === expandGen) examplesLoading.value = false
   }
 }
 
@@ -556,11 +563,11 @@ async function load() {
   playingClip.value = null
   try {
     const offset = (currentPage.value - 1) * 100
-    const { words: w, stats, available_lists } = await getVocabStats(selectedList.value, 100, offset)
-    if (stats) siteStats.value = stats
+    // Request 101 to detect if there's a next page without an extra round-trip
+    const { words: w, available_lists } = await getVocabStats(selectedList.value, 101, offset)
     if (available_lists) availableLists.value = available_lists
-    words.value = w
-    isLastPage.value = w.length < 100
+    isLastPage.value = w.length <= 100
+    words.value = w.slice(0, 100)
     syncSrsStatuses()
     checkShowBootstrap()
   } catch {
@@ -574,6 +581,7 @@ function selectList(id) {
   selectedList.value = id
   currentPage.value = 1
   searchQuery.value = ''
+  examplesCache.clear()
   load()
 }
 
