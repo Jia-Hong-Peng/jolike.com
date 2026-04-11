@@ -8,7 +8,7 @@ Must be run **locally on a residential IP** — YouTube blocks datacenter IPs (G
 
 ---
 
-## Current Status (2026-04-09, 重開機前更新)
+## Current Status (2026-04-12 更新)
 
 ### 已完成的 Channel
 
@@ -16,17 +16,24 @@ Must be run **locally on a residential IP** — YouTube blocks datacenter IPs (G
 |---------|------|
 | All Ears English | ✅ 完成（919 ok + 84 no_captions） |
 | Team Coco | ✅ 完成（604 ok） |
-| 其餘 21 個 channels | ❌ 全部需重跑（見下方說明） |
+| 其餘 21 個 channels | ❌ 全部需重跑（rate limited） |
 
-### IP 封鎖情況（2026-04-09 更新）
+### IP 封鎖情況（2026-04-12 更新）
 
 - **All Ears English / Team Coco 成功**：前次 session 已抓完，DB 已儲存
-- **本次 session（2026-04-09）**：IP 初始測試乾淨，但跑完大量影片後 429 再度觸發
-  - yt-dlp 回傳 `no_captions`（找不到 json3 檔）
-  - youtube-transcript-api 的 `fetch()` 也收到 `429 Too Many Requests`
-  - 因此所有 channel 本次跑完都是 **0 saved**，資料庫未被修改，影片仍為 stub
-- **已跑過但 0 saved 的 channel**（需重跑）：BBC Learning English、The Mindset Mentor、A Better You Podcast、anything goes with emma chamberlain、BBC News、BBC World Service、CNBC、Big Think、gabbyreads、The Diary Of A CEO、Tucker Carlson、Jay Shetty Podcast、Ben Shapiro、Brett Cooper、Chris Williamson、MrBeast、TED（進行到 674/903 時停止）、Dwarkesh Patel、The Tonight Show、All-In Podcast、PowerfulJRE
+- **2026-04-11 session**：跑 BBC Learning English 約 150 部影片後，yt-dlp subtitle endpoint 429 觸發
+  - `youtube-transcript-api` 的 `fetch()` 也同時 429（但 `list_transcripts` 仍可呼叫）
+  - 所有後續 channel 都是 **0 saved**，資料庫未被修改
+- **2026-04-12 02:43 CST**：429 仍持續（尚未解除）
+- **需重跑的 channel**（21 個）：BBC Learning English、The Mindset Mentor、A Better You Podcast、anything goes with emma chamberlain、BBC News、BBC World Service、CNBC、Big Think、gabbyreads、The Diary Of A CEO、Tucker Carlson、Jay Shetty Podcast、Ben Shapiro、Brett Cooper、Chris Williamson、MrBeast、TED、Dwarkesh Patel、The Tonight Show、All-In Podcast、PowerfulJRE
 - **換IP方式**：重開機讓路由器重新取得新的外部IP
+
+### 新增的 Script 改進（2026-04-12）
+
+- `fetch-transcripts.py` 現在偵測 429 並立即中止（不再默默跑完所有 stubs）
+  - yt-dlp stderr 含 `429` 或 `Too Many Requests` → 回傳 `rate_limited`
+  - Main loop 遇到 `rate_limited` 立即列印錯誤訊息並 `sys.exit(1)`
+  - 解決了「大量假 no_captions 看不出被 rate-limit」的問題
 
 ### 重要：`no_captions` 不會污染資料庫
 
