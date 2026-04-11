@@ -363,24 +363,21 @@ export async function getVocabWordRankings(DB, listId, limit = 100, offset = 0) 
  * @returns {Promise<Array<{id, title}>>}
  */
 export async function getVideosForWord(DB, listId, word) {
+  // Use json_each() to filter at the DB level instead of pulling all rows into JS.
+  // D1 (SQLite 3.44+) supports json_each for JSON arrays.
   const { results } = await DB
     .prepare(`
-      SELECT v.id, v.title, vv.words
+      SELECT v.id, v.title
       FROM video_vocab vv
       JOIN videos v ON v.id = vv.video_id
+      JOIN json_each(vv.words) je ON lower(je.value) = lower(?)
       WHERE vv.list_id = ?
         AND v.deleted_at IS NULL
       ORDER BY v.analyzed_at DESC
+      LIMIT 10
     `)
-    .bind(listId)
+    .bind(word, listId)
     .all()
 
-  const lw = word.toLowerCase()
-  return (results ?? [])
-    .filter(row => {
-      try {
-        return JSON.parse(row.words).some(w => w.toLowerCase() === lw)
-      } catch { return false }
-    })
-    .map(row => ({ id: row.id, title: row.title }))
+  return (results ?? []).map(row => ({ id: row.id, title: row.title }))
 }
