@@ -103,8 +103,7 @@
             📥 掃描全部歷史影片
           </button>
           <span v-else class="text-xs text-green-500 px-2 py-2">✓ 歷史影片已全部入庫</span>
-
-        </div>
+</div>
 
         <!-- Result notice -->
         <p v-if="channelResult[ch.id]" class="mt-2 text-xs" :class="channelResult[ch.id].ok ? 'text-green-400' : 'text-red-400'">
@@ -117,7 +116,7 @@
     <div class="mt-8 bg-gray-900/50 border border-gray-800 rounded-2xl px-4 py-3 text-xs text-gray-500">
       <p class="font-semibold text-gray-400 mb-1">⏰ 自動同步</p>
       <p>GitHub Actions cron 每小時自動呼叫 RSS 同步，新影片會自動入庫。</p>
-      <p class="mt-1.5 text-gray-600">字幕須在本機（住宅 IP）執行批次腳本抓取：<br><code class="text-gray-500">python3 scripts/fetch-transcripts.py</code></p>
+      <p class="mt-1.5 text-gray-600">字幕須在本機（住宅 IP）執行批次腳本抓取：<br /><code class="text-gray-500">python3 scripts/fetch-transcripts.py</code></p>
     </div>
   </div>
 </template>

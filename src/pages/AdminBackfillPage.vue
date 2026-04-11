@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-black text-white px-5 py-8 max-w-lg mx-auto">
     <h1 class="text-xl font-bold mb-1">詞彙索引補建</h1>
     <p class="text-gray-500 text-sm mb-6">
-      對所有歷史影片重新掃描詞彙庫，補建 D1 vocab index。<br>
+      對所有歷史影片重新掃描詞彙庫，補建 D1 vocab index。<br />
       已有索引的影片會直接覆蓋（安全）。
     </p>
 

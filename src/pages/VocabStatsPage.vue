@@ -6,7 +6,9 @@
         class="w-10 h-10 min-h-[44px] min-w-[44px] flex items-center justify-center
                rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
         @click="goHome"
-      >←</button>
+      >
+←
+</button>
       <h1 class="text-lg font-bold flex-1">學習排行榜</h1>
       <span class="text-gray-500 text-sm">{{ currentListMeta?.emoji }} {{ currentListMeta?.label }}</span>
     </div>
@@ -44,7 +46,9 @@
             v-if="!isLastPage"
             class="mt-2 bg-blue-600 text-white text-xs px-4 py-2 rounded-xl font-semibold min-h-[36px]"
             @click="loadNextPage"
-          >繼續挑戰 {{ currentPage * 100 + 1 }}–{{ (currentPage + 1) * 100 }} →</button>
+          >
+繼續挑戰 {{ currentPage * 100 + 1 }}–{{ (currentPage + 1) * 100 }} →
+</button>
         </div>
         <div v-else class="flex items-center gap-3">
           <div class="flex-1">
@@ -74,11 +78,15 @@
           <button
             class="flex-1 bg-gray-800 text-gray-300 py-2 rounded-xl text-sm font-semibold min-h-[40px]"
             @click="bootstrapAnswer(false)"
-          >不熟</button>
+          >
+不熟
+</button>
           <button
             class="flex-1 bg-green-700 text-white py-2 rounded-xl text-sm font-semibold min-h-[40px]"
             @click="bootstrapAnswer(true)"
-          >我會了 ✓</button>
+          >
+我會了 ✓
+</button>
         </div>
         <p class="text-gray-600 text-xs mt-2">{{ bootstrapIdx + 1 }} / {{ bootstrapWords.length }}</p>
       </div>
@@ -86,11 +94,15 @@
         <button
           class="flex-1 bg-gray-800 text-gray-300 text-xs py-2 rounded-xl min-h-[36px]"
           @click="showBootstrap = false"
-        >略過</button>
+        >
+略過
+</button>
         <button
           class="flex-1 bg-blue-600 text-white text-sm font-semibold py-2 rounded-xl min-h-[36px]"
           @click="startBootstrap"
-        >開始快速分類</button>
+        >
+開始快速分類
+</button>
       </div>
     </div>
 
@@ -116,7 +128,9 @@
             ? 'bg-blue-600 text-white'
             : 'bg-gray-800 text-gray-400 hover:bg-gray-700'"
           @click="selectList(list.id)"
-        >{{ list.emoji }} {{ list.label }}</button>
+        >
+{{ list.emoji }} {{ list.label }}
+</button>
       </div>
     </div>
 
@@ -201,7 +215,9 @@
                   : 'bg-gray-800 text-gray-500 hover:bg-gray-700 hover:text-white'"
                 :title="srsStatuses[item.word] === 'mastered' ? '取消：我不熟' : '我會了'"
                 @click.stop="toggleMastery(item.word)"
-              >{{ srsStatuses[item.word] === 'mastered' ? '✓' : '+' }}</button>
+              >
+{{ srsStatuses[item.word] === 'mastered' ? '✓' : '+' }}
+</button>
             </div>
 
             <!-- Inline panel (expanded) -->
@@ -246,7 +262,9 @@
                         <button
                           class="text-xs text-blue-400 hover:text-blue-300 underline min-h-[32px] px-2"
                           @click="playClip(ex)"
-                        >▶ 播放片段</button>
+                        >
+▶ 播放片段
+</button>
                       </div>
                     </div>
                     <!-- YouTube iframe (shown when clip is playing) -->
@@ -292,23 +310,28 @@
                   v-if="srsStatuses[item.word] !== 'mastered'"
                   class="flex-1 bg-green-700 text-white text-sm font-semibold py-2.5 rounded-xl min-h-[44px] active:scale-95 transition-transform"
                   @click="markKnownAndCollapse(item.word)"
-                >✓ 我會了</button>
+                >
+✓ 我會了
+</button>
                 <button
                   v-if="srsStatuses[item.word] !== 'mastered'"
                   class="bg-gray-800 text-gray-400 text-sm px-3 py-2.5 rounded-xl min-h-[44px]"
                   @click="markUnsureAndCollapse(item.word)"
-                >之後再複習</button>
+                >
+之後再複習
+</button>
                 <button
                   class="bg-gray-800 text-gray-500 text-sm px-3 py-2.5 rounded-xl min-h-[44px]"
                   @click="expandedWord = null; playingClip = null"
-                >✕</button>
+                >
+✕
+</button>
               </div>
             </div>
           </div>
         </template>
       </div>
-
-    </div>
+</div>
   </div>
 </template>
 

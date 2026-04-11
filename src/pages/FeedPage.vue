@@ -136,8 +136,7 @@
             @next="onNext"
           />
         </LearningCard>
-
-      </div>
+</div>
     </div>
 
     <!-- Nav buttons: Teleported to body as fixed to avoid YouTube iframe z-index issue -->
@@ -160,7 +159,9 @@
                    hover:bg-black/70 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             title="回首頁"
             @click="goHome"
-          >←</button>
+          >
+←
+</button>
           <div class="bg-black/50 backdrop-blur-sm text-gray-300 text-xs px-3 py-2 rounded-full border border-white/20">
             {{ currentIndex + 1 }} / {{ cards.length }}
           </div>
@@ -174,7 +175,9 @@
             }"
             :title="currentLevel.desc"
             @click="cycleLevel"
-          >{{ currentLevel.label }} ⟳</button>
+          >
+{{ currentLevel.label }} ⟳
+</button>
         </div>
       </template>
     </Teleport>
