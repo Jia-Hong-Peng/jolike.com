@@ -59,11 +59,10 @@ v-for="(item, idx) in phrases" :key="item.phrase"
 
               <!-- Example sentence -->
               <p
-v-if="item.example_text"
+                v-if="item.example_text"
                 class="text-gray-400 text-sm mt-2 leading-relaxed italic"
->
-                "{{ highlightPhrase(item.example_text, item.phrase) }}"
-              </p>
+                v-html="'&ldquo;' + highlightPhrase(item.example_text, item.phrase) + '&rdquo;'"
+              ></p>
 
               <!-- Action buttons -->
               <div v-if="item.example_video_id" class="flex gap-2 mt-3">
@@ -160,9 +159,31 @@ function openShadow(item) {
   window.location.href = `/shadow/?v=${item.example_video_id}&t=${t}`
 }
 
-function highlightPhrase(text, _phrase) {
-  // Return the example text with the phrase noted (plain text; keep simple)
-  return text.length > 120 ? text.slice(0, 120) + '…' : text
+function highlightPhrase(text, phrase) {
+  // Truncate, escape HTML entities, then bold-highlight the phrase.
+  // Content is from controlled DB (phrase_stats), so XSS risk is low,
+  // but we escape the text first to be safe.
+  const truncated = text.length > 120 ? text.slice(0, 120) + '…' : text
+  const escaped = truncated
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+
+  if (!phrase) return escaped
+
+  // Case-insensitive highlight of the phrase within the escaped text
+  const escapedPhrase = phrase
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  return escaped.replace(
+    new RegExp(`(${escapedPhrase})`, 'gi'),
+    '<strong class="text-white not-italic">$1</strong>',
+  )
 }
 
 function goBack() {
