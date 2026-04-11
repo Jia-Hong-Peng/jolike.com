@@ -20,6 +20,7 @@
 import awlWords      from '@/data/coca5000.json'
 import awlNawlData   from '@/data/awl_nawl.json'
 import cedict        from '@/data/cedict.json'
+import basicZh       from '@/data/basic_zh.json'
 import cefrVocab     from '@/data/cefr_vocab.json'
 import toeicVocab    from '@/data/toeic_vocab.json'
 
@@ -193,9 +194,16 @@ export function isKnownVocab(word) {
 // ── Chinese meaning lookup ─────────────────────────────────────────────────────
 export function lookupMeaning(keyword) {
   const key = keyword.toLowerCase()
-  return cedict[key]
-    || cedict[key.replace(/-/g, ' ')]
-    || cedict[canonicalForm(key)]
-    || ''
+  if (cedict[key]) return cedict[key]
+  const hyphen = key.replace(/-/g, ' ')
+  if (cedict[hyphen]) return cedict[hyphen]
+  const canon = canonicalForm(key)
+  if (cedict[canon]) return cedict[canon]
+  if (basicZh[key]) return basicZh[key]
+  if (basicZh[canon]) return basicZh[canon]
+  for (const stem of morphStems(key)) {
+    if (basicZh[stem]) return basicZh[stem]
+  }
+  return ''
 }
 
