@@ -6,3 +6,7 @@ pages_build_output_dir = "./dist"
 binding = "DB"
 database_name = "jolike-english-db"
 database_id = "453c110d-21f7-4576-90fc-5284f5f28811"
+
+[[r2_buckets]]
+binding = "TRANSCRIPTS"
+bucket_name = "jolike-transcripts"
