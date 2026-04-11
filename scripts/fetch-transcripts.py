@@ -81,18 +81,28 @@ def api_get(path):
     with urllib.request.urlopen(req, timeout=15) as res:
         return json.loads(res.read())
 
-def api_post(path, data, auth=None):
+def api_post(path, data, auth=None, retries=3):
     url = f"{API_BASE}{path}"
     body = json.dumps(data).encode()
-    req = urllib.request.Request(url, data=body, method='POST', headers=HEADERS)
-    req.add_header('Content-Type', 'application/json')
-    if auth:
-        req.add_header('Authorization', f'Bearer {auth}')
-    try:
-        with urllib.request.urlopen(req, timeout=20) as res:
-            return res.getcode(), json.loads(res.read())
-    except urllib.error.HTTPError as e:
-        return e.code, {}
+    for attempt in range(1, retries + 1):
+        req = urllib.request.Request(url, data=body, method='POST', headers=HEADERS)
+        req.add_header('Content-Type', 'application/json')
+        if auth:
+            req.add_header('Authorization', f'Bearer {auth}')
+        try:
+            with urllib.request.urlopen(req, timeout=30) as res:
+                return res.getcode(), json.loads(res.read())
+        except urllib.error.HTTPError as e:
+            return e.code, {}
+        except (TimeoutError, OSError) as e:
+            if attempt < retries:
+                wait = attempt * 5
+                sys.stdout.write(f"[timeout, retry {attempt}/{retries} in {wait}s] ")
+                sys.stdout.flush()
+                time.sleep(wait)
+            else:
+                sys.stdout.write(f"[timeout, giving up] ")
+                return 0, {}
 
 def get_channels():
     data = api_get('/api/channels')
@@ -150,8 +160,12 @@ def fetch_via_ytdlp(video_id):
             '--sub-format', 'json3',
             '--output', f'{tmpdir}/%(id)s',
             '--no-playlist',
-            '--extractor-args', 'youtube:player_client=android,ios,web',
+            # android/ios work from residential IPs without PO Token or cookies
+            # web client requires PO Token; cookies break android/ios — skip both
+            '--extractor-args', 'youtube:player_client=android,ios',
         ]
+        if COOKIES_PATH:
+            cmd += ['--cookies', COOKIES_PATH]
         cmd.append(url)
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
