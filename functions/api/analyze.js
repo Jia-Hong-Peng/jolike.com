@@ -6,10 +6,12 @@
 
 import { extractVideoId, fetchTranscript } from './_lib/youtube.js'
 import { getVideo, saveVideo, upsertVideo, deleteVideo } from './_lib/db.js'
+import { getTranscript, saveTranscript } from './_lib/r2.js'
 
 export async function onRequestPost(context) {
   const { request, env } = context
   const DB = env.DB
+  const R2 = env.TRANSCRIPTS
 
   let body
   try {
@@ -32,11 +34,12 @@ export async function onRequestPost(context) {
     const videoId = extractVideoId(url || '')
     if (!videoId) return jsonError(400, 'INVALID_URL', '請輸入有效的 YouTube 連結')
     try {
+      if (R2) await saveTranscript(R2, videoId, preloadedTranscript)
       await upsertVideo(DB, {
         id: videoId,
         title: preloadedTitle || '',
         duration_seconds: preloadedDuration || 0,
-        transcript: preloadedTranscript,
+        transcript: R2 ? 'r2' : preloadedTranscript,
       })
     } catch (err) {
       console.error('D1 save error:', err)
@@ -61,13 +64,16 @@ export async function onRequestPost(context) {
 
   // Return real cached transcript immediately
   if (cached && !isStub) {
+    const transcript = cached.transcript_in_r2 && R2
+      ? await getTranscript(R2, videoId)
+      : cached.raw_transcript
     return jsonOk({
       video: {
         id: cached.id,
         title: cached.title,
         duration_seconds: cached.duration_seconds,
       },
-      transcript: cached.raw_transcript,
+      transcript,
       cached: true,
     })
   }
@@ -101,12 +107,14 @@ export async function onRequestPost(context) {
   const lastSeg = transcript[transcript.length - 1]
   const duration_seconds = lastSeg ? Math.ceil(lastSeg.start + lastSeg.dur) : 0
 
-  // Persist to D1 (upsert for stubs, insert-ignore for new videos)
+  // Persist transcript to R2 (preferred) then update D1 with sentinel or fallback JSON
   try {
+    if (R2) await saveTranscript(R2, videoId, transcript)
+    const raw = R2 ? 'r2' : transcript
     if (isStub) {
-      await upsertVideo(DB, { id: videoId, title: cached.title || title, duration_seconds, transcript })
+      await upsertVideo(DB, { id: videoId, title: cached.title || title, duration_seconds, transcript: raw })
     } else {
-      await saveVideo(DB, { id: videoId, title, duration_seconds, transcript })
+      await saveVideo(DB, { id: videoId, title, duration_seconds, transcript: raw })
     }
   } catch (err) {
     console.error('D1 save error:', err)

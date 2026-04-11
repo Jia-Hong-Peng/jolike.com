@@ -17,13 +17,16 @@ export async function getVideo(DB, id) {
 
   if (!row) return null
 
+  const raw = row.raw_transcript
   return {
     id: row.id,
     channel_id: row.channel_id,
     title: row.title,
     duration_seconds: row.duration_seconds,
     analyzed_at: row.analyzed_at,
-    raw_transcript: JSON.parse(row.raw_transcript),
+    // 'r2' sentinel means transcript lives in R2, not D1
+    raw_transcript: (raw && raw !== 'r2') ? JSON.parse(raw) : null,
+    transcript_in_r2: raw === 'r2',
   }
 }
 
@@ -75,12 +78,13 @@ export async function deletePushSubscription(DB, endpoint) {
  */
 export async function saveVideo(DB, { id, title, duration_seconds, transcript }) {
   const analyzed_at = Math.floor(Date.now() / 1000)
-
+  // transcript may be 'r2' sentinel or an actual array
+  const raw = transcript === 'r2' ? 'r2' : JSON.stringify(transcript)
   await DB
     .prepare(
       'INSERT OR IGNORE INTO videos (id, title, duration_seconds, analyzed_at, raw_transcript) VALUES (?, ?, ?, ?, ?)'
     )
-    .bind(id, title ?? '', duration_seconds ?? 0, analyzed_at, JSON.stringify(transcript))
+    .bind(id, title ?? '', duration_seconds ?? 0, analyzed_at, raw)
     .run()
 }
 
@@ -92,6 +96,8 @@ export async function saveVideo(DB, { id, title, duration_seconds, transcript })
  */
 export async function upsertVideo(DB, { id, title, duration_seconds, transcript }) {
   const analyzed_at = Math.floor(Date.now() / 1000)
+  // transcript may be 'r2' sentinel or an actual array
+  const raw = transcript === 'r2' ? 'r2' : JSON.stringify(transcript)
   await DB
     .prepare(
       `INSERT INTO videos (id, title, duration_seconds, analyzed_at, raw_transcript)
@@ -101,7 +107,7 @@ export async function upsertVideo(DB, { id, title, duration_seconds, transcript 
          duration_seconds = CASE WHEN excluded.duration_seconds > 0 THEN excluded.duration_seconds ELSE duration_seconds END,
          analyzed_at = excluded.analyzed_at`
     )
-    .bind(id, title ?? '', duration_seconds ?? 0, analyzed_at, JSON.stringify(transcript))
+    .bind(id, title ?? '', duration_seconds ?? 0, analyzed_at, raw)
     .run()
 }
 

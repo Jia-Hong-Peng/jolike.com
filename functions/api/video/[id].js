@@ -7,10 +7,12 @@
 
 import { getVideo, upsertVideo, deleteVideo } from '../_lib/db.js'
 import { fetchTranscript } from '../_lib/youtube.js'
+import { getTranscript, saveTranscript } from '../_lib/r2.js'
 
 export async function onRequestGet(context) {
   const { params, env } = context
   const DB = env.DB
+  const R2 = env.TRANSCRIPTS
   const videoId = params.id
 
   if (!videoId) {
@@ -24,20 +26,21 @@ export async function onRequestGet(context) {
     return jsonError(404, 'NOT_FOUND', 'Video not found')
   }
 
-  // Stub: transcript was not yet fetched (channel import stores empty transcript)
-  const isStub = !video.raw_transcript || video.raw_transcript.length === 0
+  // Stub: no transcript in D1 or R2
+  const isStub = !video.raw_transcript && !video.transcript_in_r2
 
   if (isStub) {
     // Fetch transcript from YouTube on-demand
     const result = await fetchTranscript(videoId)
 
     if (result?.transcript && result.transcript.length > 0) {
-      // Update D1 with real transcript (upsert overwrites the empty stub)
+      // Save to R2 (preferred) then update D1 with sentinel or fallback JSON
+      if (R2) await saveTranscript(R2, videoId, result.transcript)
       await upsertVideo(DB, {
         id: videoId,
         title: video.title,
         duration_seconds: video.duration_seconds,
-        transcript: result.transcript,
+        transcript: R2 ? 'r2' : result.transcript,
       })
 
       return jsonOk({
@@ -52,13 +55,18 @@ export async function onRequestGet(context) {
     return jsonError(422, 'NO_CAPTIONS', '此影片不含英文字幕，請換一支影片')
   }
 
+  // Serve transcript from D1 (legacy) or R2
+  const transcript = video.transcript_in_r2 && R2
+    ? await getTranscript(R2, videoId)
+    : video.raw_transcript
+
   return jsonOk({
     video: {
       id: video.id,
       title: video.title,
       duration_seconds: video.duration_seconds,
     },
-    transcript: video.raw_transcript,
+    transcript,
     cached: true,
   })
 }

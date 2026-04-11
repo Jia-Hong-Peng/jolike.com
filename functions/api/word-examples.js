@@ -15,9 +15,12 @@ const VALID_LISTS = new Set([
 const MAX_VIDEOS  = 10
 const MAX_RESULTS = 5
 
+import { getTranscript } from './_lib/r2.js'
+
 export async function onRequestGet(context) {
   const { request, env } = context
   const DB = env.DB
+  const R2 = env.TRANSCRIPTS
 
   const url    = new URL(request.url)
   const word   = (url.searchParams.get('word') || '').trim()
@@ -44,6 +47,7 @@ export async function onRequestGet(context) {
           AND LOWER(je.value) = ?
           AND v.deleted_at IS NULL
           AND v.raw_transcript IS NOT NULL
+          AND v.raw_transcript != '[]'
         LIMIT ?
       `)
       .bind(listId, lw, MAX_VIDEOS)
@@ -55,28 +59,28 @@ export async function onRequestGet(context) {
 
     const videoIds = vocabRows.map(r => r.video_id)
 
-    // Step 2: fetch transcripts for matched videos
-    // D1 doesn't support IN with variable length — use individual queries batched
-    const transcriptQueries = videoIds.map(id =>
+    // Step 2: fetch transcripts — batch D1 metadata, then resolve each transcript
+    const metaQueries = videoIds.map(id =>
       DB.prepare('SELECT id, title, raw_transcript FROM videos WHERE id = ?').bind(id)
     )
-    const transcriptResults = await DB.batch(transcriptQueries)
+    const metaResults = await DB.batch(metaQueries)
 
-    // Step 3: parse each transcript and find segments containing the word.
-    // Match the canonical form AND common inflections, because the batch indexer
-    // stores canonical forms (e.g., "fee") but transcripts contain inflected
-    // forms (e.g., "fees", "achieving", "majored").
+    // Step 3: resolve each transcript (D1 JSON or R2) and find segments
     const examples = []
     const wordRe = buildWordRegex(lw)
 
-    for (const result of transcriptResults) {
+    for (const result of metaResults) {
       if (examples.length >= limit) break
       const row = result.results?.[0]
       if (!row || !row.raw_transcript) continue
 
       let transcript
       try {
-        transcript = JSON.parse(row.raw_transcript)
+        if (row.raw_transcript === 'r2') {
+          transcript = R2 ? await getTranscript(R2, row.id) : null
+        } else {
+          transcript = JSON.parse(row.raw_transcript)
+        }
       } catch {
         continue
       }
