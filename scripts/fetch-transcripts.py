@@ -156,7 +156,7 @@ def fetch_via_ytdlp(video_id):
             '--skip-download',
             '--write-auto-sub',
             '--write-sub',
-            '--sub-lang', 'en',
+            '--sub-lang', 'en,en-GB,en-US,en-AU,en-CA',
             '--sub-format', 'json3',
             '--output', f'{tmpdir}/%(id)s',
             '--no-playlist',
@@ -219,14 +219,14 @@ def fetch_via_transcript_api(video_id):
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
 
         transcript = None
-        for lang in ['en']:
+        for lang in ['en', 'en-GB', 'en-US', 'en-AU', 'en-CA']:
             try:
                 transcript = transcript_list.find_manually_created_transcript([lang])
                 break
             except NoTranscriptFound:
                 pass
         if transcript is None:
-            for lang in ['en']:
+            for lang in ['en', 'en-GB', 'en-US', 'en-AU', 'en-CA']:
                 try:
                     transcript = transcript_list.find_generated_transcript([lang])
                     break
