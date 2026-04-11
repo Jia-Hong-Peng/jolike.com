@@ -9,7 +9,7 @@
 import { fetchChannelRss, fetchChannelVideoIds } from '../_lib/youtube.js'
 import {
   getChannel, deleteChannel,
-  saveChannelVideoStubs, updateChannelVideoCount, markChannelSynced,
+  saveChannelVideoStub, saveChannelVideoStubs, updateChannelVideoCount, markChannelSynced,
   markChannelImportDone, getChannelVideoIds,
 } from '../_lib/db.js'
 
