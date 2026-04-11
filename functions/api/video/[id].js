@@ -26,8 +26,9 @@ export async function onRequestGet(context) {
     return jsonError(404, 'NOT_FOUND', 'Video not found')
   }
 
-  // Stub: no transcript in D1 or R2
-  const isStub = !video.raw_transcript && !video.transcript_in_r2
+  // Stub: no real transcript in D1 or R2.
+  // raw_transcript is parsed to [] for channel-sync stubs — check length, not truthiness.
+  const isStub = (!video.raw_transcript || video.raw_transcript.length === 0) && !video.transcript_in_r2
 
   if (isStub) {
     // Fetch transcript from YouTube on-demand
