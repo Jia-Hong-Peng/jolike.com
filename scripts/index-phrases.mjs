@@ -50,6 +50,7 @@ const FILLER_REGEXES = [
   /\b(you're still unsure|still on the fence)\b/,
   /\bmodern\s*wisdom\b/i,   // specific channel name
   /\bcom\b.{0,10}\bthat'?s\b/, // sponsor URL patterns like "com that's"
+  /\b(i mean i|right right|yeah yeah|oh oh)\b/,  // repetitive filler patterns
 ]
 
 function isFiller(phrase) {
@@ -74,6 +75,8 @@ const STOP = new Set([
   'suddenly','finally','quickly','slowly','clearly','easily','directly',
   'immediately','recently','actually','basically','totally','literally',
   'definitely','obviously','apparently','honestly','seriously','absolutely',
+  // Spoken filler words — phrases starting/ending with these are low-quality
+  'um','uh','ah','er','yeah','kinda','sorta',
 ])
 
 function isStop(w) { return STOP.has(w) }
