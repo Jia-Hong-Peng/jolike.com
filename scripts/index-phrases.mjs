@@ -26,7 +26,8 @@ const DELAY_MS     = 200
 
 const args = process.argv.slice(2)
 const getArg = (flag, def) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : def }
-const MAX_VIDEOS  = parseInt(getArg('--limit', 'Infinity'))
+const _limitArg  = getArg('--limit', null)
+const MAX_VIDEOS  = _limitArg ? parseInt(_limitArg) : Infinity
 const MIN_VIDEOS  = parseInt(getArg('--min-videos', '5'))
 const TOP_PHRASES = parseInt(getArg('--top', '500'))
 const DRY_RUN     = args.includes('--dry-run')
@@ -149,7 +150,7 @@ async function fetchVideoList() {
 
 async function fetchTranscript(videoId) {
   const data = await apiGet(`/api/video/${videoId}`)
-  return data?.video?.transcript || null
+  return data?.transcript || null
 }
 
 async function pushPhrases(phrases) {
