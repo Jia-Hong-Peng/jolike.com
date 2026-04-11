@@ -34,3 +34,7 @@ src/data/longman3000.json
 src/data/maximax_cefr.json
 src/data/ngsl_spoken.json
 src/data/subtlex_us.json
+
+# Local handoff/session notes (may contain secrets)
+HANDOFF.md
+HANDOFF*.md
