@@ -1,14 +1,15 @@
 <template>
   <div class="min-h-screen bg-black text-white overflow-hidden relative">
-
-    <!-- ── List selection (no ?list param) ──────────────────────────────────── -->
+<!-- ── List selection (no ?list param) ──────────────────────────────────── -->
     <div v-if="!listId" class="min-h-screen flex flex-col px-5 py-8">
       <div class="flex items-center gap-3 mb-8">
         <button
           class="w-10 h-10 min-h-[44px] min-w-[44px] flex items-center justify-center
                  rounded-full bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
           @click="goHome"
-        >←</button>
+        >
+←
+</button>
         <h1 class="text-xl font-bold">詞彙清單</h1>
       </div>
       <p class="text-gray-500 text-sm mb-6">選擇考試類型，開始系統學習</p>
@@ -89,7 +90,9 @@
           class="bg-gray-900 text-gray-400 text-xs px-3 py-2 rounded-full border border-gray-700
                  hover:bg-gray-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
           @click="goHome"
-        >←</button>
+        >
+←
+</button>
         <div class="bg-gray-900 text-gray-400 text-xs px-3 py-2 rounded-full border border-gray-700">
           {{ currentIndex + 1 }} / {{ cards.length }}
         </div>
@@ -134,7 +137,9 @@
                      hover:bg-gray-700 transition-colors flex items-center justify-center text-xl mt-1"
               title="朗讀"
               @click="speakWord"
-            >🔊</button>
+            >
+🔊
+</button>
           </div>
 
           <!-- Base form (lemma) -->
@@ -152,7 +157,9 @@
           <p
             v-if="dictData?.definition"
             class="text-gray-200 text-base leading-relaxed mb-3"
-          >{{ dictData.definition }}</p>
+          >
+{{ dictData.definition }}
+</p>
 
           <!-- Chinese meaning -->
           <p class="text-lg font-medium mb-1" :class="dictData?.definition ? 'text-gray-400' : 'text-gray-200'">
@@ -241,7 +248,9 @@
             <button
               class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-800 text-gray-300"
               @click="closePlaylist"
-            >✕</button>
+            >
+✕
+</button>
             <div>
               <p class="text-white text-sm font-semibold">{{ currentCard?.keyword }} 片段大集合</p>
               <p class="text-gray-500 text-xs">
@@ -256,12 +265,16 @@
               class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-800 text-gray-300 disabled:opacity-30"
               :disabled="playlistIdx === 0"
               @click="playlistPrev"
-            >◀</button>
+            >
+◀
+</button>
             <button
               class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-800 text-gray-300 disabled:opacity-30"
               :disabled="playlistIdx >= playlistClips.length - 1"
               @click="playlistNext"
-            >▶</button>
+            >
+▶
+</button>
           </div>
         </div>
 

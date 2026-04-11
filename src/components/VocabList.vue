@@ -13,7 +13,9 @@
       <button
         class="text-gray-400 hover:text-white min-w-[44px] min-h-[44px] flex items-center justify-center"
         @click="$emit('close')"
-      >✕</button>
+      >
+✕
+</button>
     </div>
 
     <!-- List tabs -->
@@ -117,7 +119,8 @@
             <span class="text-sm w-5 flex-shrink-0 text-center">
               {{ statusIcon(word.cardId) }}
             </span>
-            <span class="text-white text-sm font-medium flex-1 truncate"
+            <span
+class="text-white text-sm font-medium flex-1 truncate"
               :class="word.cardIndex === currentIndex ? 'text-blue-300' : ''"
             >{{ word.word }}</span>
             <span class="text-gray-600 text-xs truncate max-w-[64px] flex-shrink-0">{{ word.meaning }}</span>
