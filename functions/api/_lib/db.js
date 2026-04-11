@@ -121,7 +121,7 @@ export async function upsertVideo(DB, { id, title, duration_seconds, transcript 
 export async function getPublicVideos(DB, { limit = 50, offset = 0 } = {}) {
   const { results } = await DB
     .prepare(
-      'SELECT id, title, duration_seconds, analyzed_at FROM videos WHERE deleted_at IS NULL ORDER BY analyzed_at DESC LIMIT ? OFFSET ?'
+      'SELECT id, title, duration_seconds, analyzed_at, channel_id FROM videos WHERE deleted_at IS NULL ORDER BY analyzed_at DESC LIMIT ? OFFSET ?'
     )
     .bind(limit, offset)
     .all()

@@ -26,13 +26,35 @@ const DELAY_MS     = 200
 
 const args = process.argv.slice(2)
 const getArg = (flag, def) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : def }
-const _limitArg  = getArg('--limit', null)
-const MAX_VIDEOS  = _limitArg ? parseInt(_limitArg) : Infinity
-const MIN_VIDEOS  = parseInt(getArg('--min-videos', '5'))
-const TOP_PHRASES = parseInt(getArg('--top', '500'))
-const DRY_RUN     = args.includes('--dry-run')
+const _limitArg      = getArg('--limit', null)
+const MAX_VIDEOS     = _limitArg ? parseInt(_limitArg) : Infinity
+const MIN_VIDEOS     = parseInt(getArg('--min-videos', '5'))
+const TOP_PHRASES    = parseInt(getArg('--top', '500'))
+const MAX_PER_CHANNEL = parseInt(getArg('--max-per-channel', '20'))  // cap per channel for diversity
+const DRY_RUN        = args.includes('--dry-run')
 
 if (!BATCH_SECRET && !DRY_RUN) { console.error('BATCH_SECRET required'); process.exit(1) }
+
+// ── Filler phrases to exclude (YouTube-specific or sponsor noise) ─────────────
+const FILLER_REGEXES = [
+  /\b(link|head|go)\b.{0,20}\b(description|bio|below)\b/,  // "link in description"
+  /\b(subscribe|notification|like button|leave a comment)\b/,
+  /\b(money back guarantee|30.day|90.day)\b/,               // sponsor guarantees
+  /\b(episode is brought|brought to you by|sponsored by)\b/,
+  /\b(ship internationally|free shipping|discount code)\b/,
+  /\b(use code|promo code|coupon code)\b/,
+  /\b(click the button|click the link|tap the link)\b/,
+  /\b(episode is available|available right now)\b/,
+  /\b(check out the|head to the|go to the)\b.{0,15}\b(link|site|website)\b/,
+  /\b(give you your|get your)\b.{0,15}\b(money|refund)\b/,
+  /\b(you're still unsure|still on the fence)\b/,
+  /\bmodern\s*wisdom\b/i,   // specific channel name
+  /\bcom\b.{0,10}\bthat'?s\b/, // sponsor URL patterns like "com that's"
+]
+
+function isFiller(phrase) {
+  return FILLER_REGEXES.some(re => re.test(phrase))
+}
 
 // ── Stopwords ─────────────────────────────────────────────────────────────────
 const STOP = new Set([
@@ -170,32 +192,41 @@ async function pushPhrases(phrases) {
 // ── Main ───────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`API: ${API_BASE}`)
-  console.log(`Config: min_videos=${MIN_VIDEOS}, top=${TOP_PHRASES}, dry=${DRY_RUN}`)
+  console.log(`Config: min_videos=${MIN_VIDEOS}, top=${TOP_PHRASES}, max_per_channel=${MAX_PER_CHANNEL}, dry=${DRY_RUN}`)
 
-  // Step 1: get a list of video IDs with transcripts
-  // We'll use word-examples to seed IDs, then crawl paginated video API
-  // For each channel we can get video IDs from vocab-stats word hits
+  // Step 1: get a list of video IDs with transcripts via /api/library pagination
   console.log('\n[1/3] Discovering videos with transcripts...')
 
-  // Seed from common words across multiple lists
   const videoIds = new Set()
-  const seedWords = [
-    'think','know','people','going','want','time','make','good','really',
-    'just','like','get','one','look','way','come','right','say','see','work',
-    'things','even','actually','great','yeah','feel','need','little','life',
-    'back','give','never','first','lot','very','much','take','something','go',
-  ]
-
+  const channelCounts = new Map()  // channel_id → count, for diversity cap
+  let libOffset = 0
+  const LIB_PAGE = 100  // API hard cap is 100
   process.stdout.write('Discovering ')
-  for (const word of seedWords) {
+  while (videoIds.size < MAX_VIDEOS) {
     try {
-      const data = await apiGet(`/api/word-examples?word=${word}&list=ngsl&limit=5`)
-      for (const ex of (data.examples || [])) videoIds.add(ex.video_id)
+      const data = await apiGet(`/api/library?limit=${LIB_PAGE}&offset=${libOffset}`)
+      const videos = data.videos || []
+      if (videos.length === 0) break
+      for (const v of videos) {
+        const ch = v.channel_id || '_unknown'
+        const count = channelCounts.get(ch) || 0
+        if (count < MAX_PER_CHANNEL) {
+          videoIds.add(v.id)
+          channelCounts.set(ch, count + 1)
+        }
+        if (videoIds.size >= MAX_VIDEOS) break
+      }
       process.stdout.write('.')
-    } catch { process.stdout.write('x') }
-    await sleep(100)
+      libOffset += videos.length
+      if (videos.length < LIB_PAGE) break  // last page
+      await sleep(DELAY_MS)
+    } catch (e) {
+      process.stdout.write('x')
+      break
+    }
   }
-  console.log(`\nFound ${videoIds.size} seed videos`)
+  const channelCount = channelCounts.size
+  console.log(`\nFound ${videoIds.size} videos from ${channelCount} channels (max ${MAX_PER_CHANNEL}/channel)`)
 
   // Step 2: extract phrases from each video's transcript
   console.log('\n[2/3] Extracting phrases from transcripts...')
@@ -252,7 +283,7 @@ async function main() {
       example_start: example?.start ?? null,
       example_text: example?.text || null,
     }))
-    .filter(p => p.video_count >= MIN_VIDEOS)
+    .filter(p => p.video_count >= MIN_VIDEOS && !isFiller(p.phrase))
     .sort((a, b) => b.video_count - a.video_count || b.total_count - a.total_count)
     .slice(0, TOP_PHRASES)
 
