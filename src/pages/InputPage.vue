@@ -224,6 +224,12 @@
         📊 全站單字排行榜
       </a>
       <a
+        href="/phrases/"
+        class="text-gray-400 text-sm hover:text-white transition-colors font-medium"
+      >
+        🗣️ 高頻短語 Top 100
+      </a>
+      <a
         href="/progress/"
         class="text-gray-600 text-sm hover:text-gray-400 transition-colors"
       >

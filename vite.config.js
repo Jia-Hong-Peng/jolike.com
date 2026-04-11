@@ -22,6 +22,7 @@ export default defineConfig({
         adminBackfill:    resolve(__dirname, 'admin-backfill/index.html'),
         adminChannels:    resolve(__dirname, 'admin-channels/index.html'),
         vocabStats:       resolve(__dirname, 'vocab-stats/index.html'),
+        phrases:          resolve(__dirname, 'phrases/index.html'),
       },
     },
   },

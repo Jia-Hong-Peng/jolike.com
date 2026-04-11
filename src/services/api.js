@@ -217,6 +217,12 @@ export async function getWordExamples(word, listId = 'ngsl', limit = 3) {
   return data.examples ?? []
 }
 
+export async function getPhraseStats({ limit = 100, offset = 0, minVideos = 3 } = {}) {
+  const res = await fetch(`${BASE}/api/phrase-stats?limit=${limit}&offset=${offset}&min_videos=${minVideos}`)
+  const data = await res.json().catch(() => ({}))
+  return { phrases: data.phrases ?? [], has_more: data.has_more ?? false }
+}
+
 /**
  * Map API error codes to user-facing messages.
  * @param {string} errorCode
