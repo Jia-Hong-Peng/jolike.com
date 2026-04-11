@@ -173,9 +173,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { VOCAB_LISTS, loadWordList, getSrsStatus } from '@/lib/vocabLists.js'
-import { lookupMeaning, getVocabCategories } from '@/lib/lookup.js'
+import { getVocabCategories } from '@/lib/lookup.js'
 import { getVocabVideos } from '@/services/api.js'
 
 const props = defineProps({

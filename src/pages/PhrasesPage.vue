@@ -148,7 +148,7 @@ function openShadow(item) {
   window.location.href = `/shadow/?v=${item.example_video_id}&t=${t}`
 }
 
-function highlightPhrase(text, phrase) {
+function highlightPhrase(text, _phrase) {
   // Return the example text with the phrase noted (plain text; keep simple)
   return text.length > 120 ? text.slice(0, 120) + '…' : text
 }
