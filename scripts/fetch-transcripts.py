@@ -60,7 +60,7 @@ args = parser.parse_args()
 
 API_BASE    = os.environ.get('API_BASE', 'https://jolike.com').rstrip('/')
 SECRET      = os.environ.get('BATCH_SECRET') or os.environ.get('CHANNEL_SYNC_SECRET')
-DELAY_MS    = int(os.environ.get('DELAY_MS', '800'))
+DELAY_MS    = int(os.environ.get('DELAY_MS', '3000'))
 LIMIT       = args.limit
 COOKIES_PATH = args.cookies or os.environ.get('YTDLP_COOKIES', '')
 
@@ -219,8 +219,9 @@ def fetch_via_transcript_api(video_id):
     if not HAS_YT_TRANSCRIPT:
         return None, 'no_yt_api'
 
+    cookies_kwargs = {'cookies': COOKIES_PATH} if COOKIES_PATH else {}
     try:
-        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id, **cookies_kwargs)
 
         transcript = None
         for lang in ['en', 'en-GB', 'en-US', 'en-AU', 'en-CA']:
