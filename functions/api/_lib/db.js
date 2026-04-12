@@ -336,7 +336,22 @@ export async function getAvailableVocabLists(DB) {
  * @returns {Promise<Array<{word: string, video_count: number}>>}
  */
 export async function getVocabWordRankings(DB, listId, limit = 100, offset = 0) {
+  // Fast path: read from pre-computed word_freq table (rebuilt by rebuild-word-freq endpoint)
   const { results } = await DB
+    .prepare(`
+      SELECT word, video_count
+      FROM word_freq
+      WHERE list_id = ?
+      ORDER BY video_count DESC
+      LIMIT ? OFFSET ?
+    `)
+    .bind(listId, limit, offset)
+    .all()
+
+  // Fallback to live json_each query if word_freq hasn't been built yet
+  if (results && results.length > 0) return results
+
+  const { results: live } = await DB
     .prepare(`
       SELECT je.value AS word, COUNT(DISTINCT vv.video_id) AS video_count
       FROM video_vocab vv, json_each(vv.words) je
@@ -351,7 +366,60 @@ export async function getVocabWordRankings(DB, listId, limit = 100, offset = 0) 
     `)
     .bind(listId, limit, offset)
     .all()
-  return results ?? []
+  return live ?? []
+}
+
+/**
+ * Rebuild word_freq for a given list_id (or all lists if listId is null).
+ * Runs as a background job after batch vocab indexing.
+ * @param {D1Database} DB
+ * @param {string|null} listId - specific list to rebuild, or null for all
+ */
+export async function rebuildWordFreq(DB, listId = null) {
+  const updated_at = Math.floor(Date.now() / 1000)
+
+  // Determine which lists to rebuild
+  let listIds
+  if (listId) {
+    listIds = [listId]
+  } else {
+    const { results } = await DB.prepare('SELECT DISTINCT list_id FROM video_vocab').all()
+    listIds = (results ?? []).map(r => r.list_id)
+  }
+
+  for (const lid of listIds) {
+    // Compute fresh counts via json_each
+    const { results } = await DB
+      .prepare(`
+        SELECT je.value AS word, COUNT(DISTINCT vv.video_id) AS video_count
+        FROM video_vocab vv, json_each(vv.words) je
+        WHERE vv.list_id = ?
+          AND EXISTS (
+            SELECT 1 FROM videos v
+            WHERE v.id = vv.video_id AND v.deleted_at IS NULL
+          )
+        GROUP BY je.value
+      `)
+      .bind(lid)
+      .all()
+
+    if (!results || results.length === 0) continue
+
+    // Delete old entries for this list and insert fresh batch
+    await DB.prepare('DELETE FROM word_freq WHERE list_id = ?').bind(lid).run()
+
+    const CHUNK = 100
+    for (let i = 0; i < results.length; i += CHUNK) {
+      const chunk = results.slice(i, i + CHUNK)
+      await DB.batch(
+        chunk.map(r =>
+          DB.prepare(
+            'INSERT INTO word_freq (list_id, word, video_count, updated_at) VALUES (?, ?, ?, ?)'
+          ).bind(lid, r.word, r.video_count, updated_at)
+        )
+      )
+    }
+  }
 }
 
 /**

@@ -26,8 +26,9 @@ const limitIdx   = args.indexOf('--limit')
 const channelIdx = args.indexOf('--channel')
 const LIMIT          = limitIdx   >= 0 ? parseInt(args[limitIdx + 1],   10) : 9999
 const CHANNEL_FILTER = channelIdx >= 0 ? (args[channelIdx + 1] || '')       : ''
-const API_BASE = (process.env.API_BASE || 'https://jolike.com').replace(/\/$/, '')
-const DELAY_MS = parseInt(process.env.DELAY_MS || '300', 10)
+const API_BASE   = (process.env.API_BASE || 'https://jolike.com').replace(/\/$/, '')
+const DELAY_MS   = parseInt(process.env.DELAY_MS || '300', 10)
+const SECRET     = process.env.BATCH_SECRET || process.env.CHANNEL_SYNC_SECRET || ''
 
 // ── Load vocab data ────────────────────────────────────────────────────────────
 
@@ -43,7 +44,7 @@ const opalData   = JSON.parse(readFileSync(join(dataDir, 'opal_phrases.json'),'u
 // Pre-build all word lists — matches vocabLists.js loadWordList() exactly
 const WORD_LISTS = {
   ngsl:     Object.keys(ngslDefs),
-  coca:     Object.keys(coca5000),
+  coca:     Array.isArray(coca5000) ? coca5000 : Object.keys(coca5000),
   cefr_a:   Object.entries(cefrVocab).filter(([, t]) => t === 1).map(([w]) => w),
   cefr_b1:  Object.entries(cefrVocab).filter(([, t]) => t === 2).map(([w]) => w),
   cefr_c1:  Object.entries(oxford5000).filter(([, v]) => v.level === 'C1').map(([w]) => w),
@@ -273,6 +274,26 @@ async function main() {
   }
 
   console.log(`\n✅ Done: ${totalIndexed} indexed, ${totalSkipped} skipped, ${totalErrors} errors`)
+
+  // Rebuild word_freq pre-computed table so vocab-stats page loads fast
+  if (totalIndexed > 0 && SECRET) {
+    process.stdout.write('\n🔄 Rebuilding word_freq table...')
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/rebuild-word-freq`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SECRET}`, 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        console.log(` done (${data.rebuilt})`)
+      } else {
+        console.log(` failed: ${res.status} ${JSON.stringify(data)}`)
+      }
+    } catch (e) {
+      console.log(` error: ${e.message}`)
+    }
+  }
 }
 
 main().catch(err => { console.error(err); process.exit(1) })

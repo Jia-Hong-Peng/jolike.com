@@ -150,7 +150,7 @@ export async function loadWordList(listId) {
   }
   if (listId === 'coca') {
     const { default: data } = await import('@/data/coca5000.json')
-    return Object.keys(data).sort()
+    return (Array.isArray(data) ? data : Object.keys(data)).sort()
   }
 
   // ── CEFR levels ──────────────────────────────────────────────────────────
